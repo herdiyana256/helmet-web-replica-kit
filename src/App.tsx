@@ -7,6 +7,13 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Checkout from "./pages/Checkout";
 import PaymentSuccess from "./pages/PaymentSuccess";
+import Helm from "./pages/Helm";
+import RsvProstreet from "./pages/RsvProstreet";
+import Apparels from "./pages/Apparels";
+import Accessories from "./pages/Accessories";
+import Promo from "./pages/Promo";
+import Career from "./pages/Career";
+import Distributor from "./pages/Distributor";
 
 const queryClient = new QueryClient();
 
@@ -18,6 +25,13 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/helm" element={<Helm />} />
+          <Route path="/rsv-prostreet" element={<RsvProstreet />} />
+          <Route path="/apparels" element={<Apparels />} />
+          <Route path="/accessories" element={<Accessories />} />
+          <Route path="/promo" element={<Promo />} />
+          <Route path="/career" element={<Career />} />
+          <Route path="/distributor" element={<Distributor />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
