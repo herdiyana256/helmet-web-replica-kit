@@ -137,3 +137,12 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+.navbar-link {
+  font-family: 'Montserrat', sans-serif;
+  color: #FFFFFF;
+  -webkit-text-stroke: 1px #000000;
+  text-stroke: 1px #000000;
+  font-weight: bold;
+  font-size: 14px;
+}

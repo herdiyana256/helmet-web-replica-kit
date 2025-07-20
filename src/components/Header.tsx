@@ -1,27 +1,16 @@
 import { useState } from "react";
+import { Search, User, ShoppingCart, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { 
-  Search, 
-  User, 
-  ShoppingCart, 
-  Menu, 
-  X,
-  ChevronDown 
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import {
-  NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  NavigationMenuTrigger,
-} from "@/components/ui/navigation-menu";
+import { Badge } from "@/components/ui/badge";
+import { NavigationMenu, NavigationMenuContent, NavigationMenuItem, NavigationMenuLink, NavigationMenuList, NavigationMenuTrigger } from "@/components/ui/navigation-menu";
+import { Link } from "react-router-dom";
 import hidekiLogo from "@/assets/hideki-logo.png";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const helmSubmenus = [
     "SV300 Series",
@@ -32,7 +21,7 @@ const Header = () => {
     "FFC21 Series",
     "FF500 Series",
     "RSV x MPL ID Exclusive Collaboration",
-    "Helmet Parts & Accessories"
+    "Helmet Parts & Accesories"
   ];
 
   const promoSubmenus = [
@@ -51,118 +40,151 @@ const Header = () => {
     { name: "DISTRIBUTOR", href: "/distributor" },
   ];
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      // Navigate to search results or filter products
+      console.log("Searching for:", searchQuery);
+      setIsSearchOpen(false);
+    }
+  };
+
+  const handleWhatsAppClick = () => {
+    window.open("https://wa.me/6281381528559", "_blank");
+  };
+
   return (
-    <header className="bg-background border-b border-border sticky top-0 z-50 backdrop-blur-sm bg-background/95">
+    <header className="bg-gradient-to-r from-helmet-dark to-helmet-gray border-b border-border sticky top-0 z-50 backdrop-blur-sm">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center">
-            <img 
-              src={hidekiLogo} 
-              alt="Hideki Helmet" 
-              className="h-10 w-auto"
-            />
-          </div>
+          <Link to="/" className="flex items-center space-x-2">
+            <img src={hidekiLogo} alt="Hideki" className="h-10 w-auto" />
+          </Link>
 
           {/* Desktop Navigation */}
           <NavigationMenu className="hidden lg:flex">
-            <NavigationMenuList className="font-gothic">
+            <NavigationMenuList className="hidden lg:flex space-x-8">
               {navItems.map((item) => (
                 <NavigationMenuItem key={item.name}>
                   {item.submenus ? (
                     <>
-                      <NavigationMenuTrigger className="text-sm font-medium text-muted-foreground hover:text-foreground bg-transparent">
+                      <NavigationMenuTrigger className="navbar-link bg-transparent hover:bg-white/10">
                         {item.name}
                       </NavigationMenuTrigger>
                       <NavigationMenuContent>
-                        <div className="grid w-[400px] gap-3 p-4 bg-popover">
+                        <div className="w-[300px] p-4">
                           {item.submenus.map((submenu) => (
                             <NavigationMenuLink
                               key={submenu}
-                              href={`${item.href}/${submenu.toLowerCase().replace(/\s+/g, '-')}`}
-                              className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                              className="block px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-md"
                             >
-                              <div className="text-sm font-medium leading-none">{submenu}</div>
+                              {submenu}
                             </NavigationMenuLink>
                           ))}
                         </div>
                       </NavigationMenuContent>
                     </>
                   ) : (
-                    <NavigationMenuLink
-                      href={item.href}
-                      className="group inline-flex h-10 w-max items-center justify-center rounded-md bg-transparent px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 text-muted-foreground hover:text-foreground"
-                    >
-                      {item.name}
-                      <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full" />
-                    </NavigationMenuLink>
+                    <Link to={item.href}>
+                      <NavigationMenuLink className="navbar-link bg-transparent hover:bg-white/10 px-4 py-2 rounded-md transition-colors">
+                        {item.name}
+                      </NavigationMenuLink>
+                    </Link>
                   )}
                 </NavigationMenuItem>
               ))}
             </NavigationMenuList>
           </NavigationMenu>
 
-          {/* Actions */}
+          {/* Action Buttons */}
           <div className="flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-foreground"
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="text-white hover:bg-white/10"
+              onClick={() => setIsSearchOpen(!isSearchOpen)}
             >
               <Search className="h-5 w-5" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-foreground"
-            >
+            
+            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
               <User className="h-5 w-5" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-foreground relative"
-              onClick={() => window.location.href = '/checkout'}
-            >
-              <ShoppingCart className="h-5 w-5" />
-              <span className="absolute -top-1 -right-1 h-4 w-4 bg-primary text-primary-foreground rounded-full text-xs flex items-center justify-center">
-                {cartCount}
-              </span>
-            </Button>
+            
+            <Link to="/checkout">
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 relative">
+                <ShoppingCart className="h-5 w-5" />
+                {cartCount > 0 && (
+                  <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                    {cartCount}
+                  </Badge>
+                )}
+              </Button>
+            </Link>
 
-            {/* Mobile menu button */}
+            {/* WhatsApp Button */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="text-white hover:bg-white/10"
+              onClick={handleWhatsAppClick}
+            >
+              <div className="h-5 w-5 bg-green-500 rounded-full flex items-center justify-center">
+                <span className="text-white text-xs font-bold">W</span>
+              </div>
+            </Button>
+            
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden text-muted-foreground hover:text-foreground"
+              className="lg:hidden text-white hover:bg-white/10"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
               {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
           </div>
         </div>
+      </div>
 
-        {/* Mobile Navigation */}
-        {isMenuOpen && (
-          <div className="lg:hidden border-t border-border">
-            <nav className="py-4 space-y-2">
+      {/* Search Bar */}
+      {isSearchOpen && (
+        <div className="bg-background/95 backdrop-blur-sm border-t border-border">
+          <div className="container mx-auto px-4 py-4">
+            <form onSubmit={handleSearch} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Cari helm, aksesoris, atau produk lainnya..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 px-4 py-2 rounded-md border border-border bg-background text-foreground"
+                autoFocus
+              />
+              <Button type="submit">Cari</Button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Menu */}
+      {isMenuOpen && (
+        <div className="lg:hidden bg-background/95 backdrop-blur-sm border-t border-border">
+          <div className="container mx-auto px-4 py-4">
+            <nav className="space-y-2">
               {navItems.map((item) => (
-                <a
+                <Link
                   key={item.name}
-                  href={item.href}
-                  className="flex items-center justify-between px-2 py-3 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/50 transition-colors"
+                  to={item.href}
+                  className="block px-4 py-2 text-foreground hover:bg-accent hover:text-accent-foreground rounded-md transition-colors"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   {item.name}
-                  {item.submenus && (
-                    <ChevronDown className="h-4 w-4" />
-                  )}
-                </a>
+                </Link>
               ))}
             </nav>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </header>
   );
 };
