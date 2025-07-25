@@ -38,7 +38,7 @@ const Footer = () => {
     {
       title: "Company",
       links: [
-        "About RSV",
+        "About Hideki",
         "Career",
         "Distributor",
         "News",
@@ -67,7 +67,7 @@ const Footer = () => {
                 Stay Updated
               </h3>
               <p className="text-lg text-muted-foreground">
-                Be the first to know about new releases, exclusive offers, and RSV news
+                Be the first to know about new releases, exclusive offers, and Hideki news
               </p>
             </div>
             
@@ -92,9 +92,9 @@ const Footer = () => {
             {/* Brand Section */}
             <div className="lg:col-span-2 space-y-6">
               <div>
-                <h2 className="text-3xl font-bold text-foreground mb-4">RSV</h2>
+                <h2 className="text-3xl font-bold text-foreground mb-4">Hideki</h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  RSV Helmets is dedicated to providing premium motorcycle helmets 
+                  Hideki Helmets is dedicated to providing premium motorcycle helmets 
                   that combine cutting-edge safety technology with innovative design. 
                   Protecting riders since 1987.
                 </p>
@@ -161,7 +161,7 @@ const Footer = () => {
         <div className="py-6 border-t border-border">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <p className="text-muted-foreground text-sm">
-              © 2024 RSV Helmets. All rights reserved.
+              © 2025 Hideki Helmets. All rights reserved.
             </p>
             <div className="flex space-x-8 text-sm">
               <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">

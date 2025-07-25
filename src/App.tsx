@@ -14,6 +14,8 @@ import Accessories from "./pages/Accessories";
 import Promo from "./pages/Promo";
 import Career from "./pages/Career";
 import Distributor from "./pages/Distributor";
+import WhatsAppFloatingButton from "@/components/WhatsAppFloatingButton";
+
 
 const queryClient = new QueryClient();
 
@@ -37,6 +39,8 @@ const App = () => (
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+          <WhatsAppFloatingButton />
+
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

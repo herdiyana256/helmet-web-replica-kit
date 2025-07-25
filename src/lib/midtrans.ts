@@ -221,3 +221,4 @@ declare global {
 }
 
 export const midtransPayment = new MidtransPayment();
+
