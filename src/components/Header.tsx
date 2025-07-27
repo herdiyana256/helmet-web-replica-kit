@@ -109,7 +109,7 @@ const Header = () => {
         <div className="flex items-center justify-between py-6">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
-            <img src="/hideki.id.png" alt="Hideki" className="h-10 w-auto" />
+            <img src="./hideki.id.png" alt="Hideki" className="h-10 w-auto" />
           </Link>
 
           {/* Desktop Navigation */}
