@@ -14,13 +14,14 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
 } from "@/components/ui/navigation-menu"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { useCartStore } from "@/store/cartStore"
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const navigate = useNavigate()
   
   // Menggunakan useCartStore untuk mendapatkan jumlah item di keranjang
   const { items } = useCartStore()
@@ -28,59 +29,58 @@ const Header = () => {
 
   // Updated helm submenus dengan brand dan kategori
   const helmSubmenus = [
- {
-  category: "Brand Helm",
-  items: [
-    { name: "KYT", href: "/helm?brand=KYT", filterKey: "KYT" },
-    { name: "ARRAY", href: "/helm?brand=ARRAY", filterKey: "ARRAY" },
-    { name: "MLA", href: "/helm?brand=MLA", filterKey: "MLA" },
-    { name: "ALV", href: "/helm?brand=ALV", filterKey: "ALV" },
-    { name: "JS", href: "/helm?brand=JS", filterKey: "JS" },
-    { name: "NIELS", href: "/helm?brand=NIELS", filterKey: "NIELS" },
-    { name: "VRC", href: "/helm?brand=VRC", filterKey: "VRC" },
-    { name: "RSV", href: "/helm?brand=RSV", filterKey: "RSV" },
-    { name: "INK", href: "/helm?brand=INK", filterKey: "INK" },
-    { name: "NHK", href: "/helm?brand=NHK", filterKey: "NHK" },
-    { name: "MDS", href: "/helm?brand=MDS", filterKey: "MDS" },
-    { name: "ZEUS", href: "/helm?brand=ZEUS", filterKey: "ZEUS" },
-    { name: "BMC", href: "/helm?brand=BMC", filterKey: "BMC" },
-    { name: "GM", href: "/helm?brand=GM", filterKey: "GM" },
-    { name: "AGV", href: "/helm?brand=AGV", filterKey: "AGV" },
-    { name: "Arai", href: "/helm?brand=Arai", filterKey: "Arai" },
-    { name: "Shoei", href: "/helm?brand=Shoei", filterKey: "Shoei" },
-    { name: "HIU", href: "/helm?brand=HIU", filterKey: "HIU" },
-    { name: "Bogo", href: "/helm?brand=Bogo", filterKey: "Bogo" },
-  ],
-},
-
-    // {
-    //   category: "Kategori Helm",
-    //   items: [
-    //     { name: "Full Face", href: "/helm?type=full-face", filterKey: "full-face" },
-    //     { name: "Open Face", href: "/helm?type=open-face", filterKey: "open-face" },
-    //     { name: "Modular", href: "/helm?type=modular", filterKey: "modular" },
-    //     { name: "Racing", href: "/helm?type=racing", filterKey: "racing" },
-    //     { name: "Touring", href: "/helm?type=touring", filterKey: "touring" },
-    //     { name: "Urban", href: "/helm?type=urban", filterKey: "urban" },
-    //   ],
-    // },
-    // {
-    //   category: "Harga",
-    //   items: [
-    //     { name: "Di bawah 1 Juta", href: "/helm?price=under-1m", filterKey: "under-1m" },
-    //     { name: "1 - 1.5 Juta", href: "/helm?price=1m-1.5m", filterKey: "1m-1.5m" },
-    //     { name: "1.5 - 2 Juta", href: "/helm?price=1.5m-2m", filterKey: "1.5m-2m" },
-    //     { name: "Di atas 2 Juta", href: "/helm?price=above-2m", filterKey: "above-2m" },
-    //   ],
-    // },
-    // {
-    //   category: "Parts & Accessories",
-    //   items: [
-    //     { name: "Visor", href: "/helm?category=visor", filterKey: "visor" },
-    //     { name: "Padding", href: "/helm?category=padding", filterKey: "padding" },
-    //     { name: "Spare Parts", href: "/helm?category=parts", filterKey: "parts" },
-    //   ],
-    // },
+    {
+      category: "Brand Helm",
+      items: [
+        { name: "KYT", href: "/helm?brand=KYT", filterKey: "KYT" },
+        { name: "ARRAY", href: "/helm?brand=ARRAY", filterKey: "ARRAY" },
+        { name: "MLA", href: "/helm?brand=MLA", filterKey: "MLA" },
+        { name: "ALV", href: "/helm?brand=ALV", filterKey: "ALV" },
+        { name: "JS", href: "/helm?brand=JS", filterKey: "JS" },
+        { name: "NIELS", href: "/helm?brand=NIELS", filterKey: "NIELS" },
+        { name: "VRC", href: "/helm?brand=VRC", filterKey: "VRC" },
+        { name: "RSV", href: "/helm?brand=RSV", filterKey: "RSV" },
+        { name: "INK", href: "/helm?brand=INK", filterKey: "INK" },
+        { name: "NHK", href: "/helm?brand=NHK", filterKey: "NHK" },
+        { name: "MDS", href: "/helm?brand=MDS", filterKey: "MDS" },
+        { name: "ZEUS", href: "/helm?brand=ZEUS", filterKey: "ZEUS" },
+        { name: "BMC", href: "/helm?brand=BMC", filterKey: "BMC" },
+        { name: "GM", href: "/helm?brand=GM", filterKey: "GM" },
+        { name: "AGV", href: "/helm?brand=AGV", filterKey: "AGV" },
+        { name: "Arai", href: "/helm?brand=Arai", filterKey: "Arai" },
+        { name: "Shoei", href: "/helm?brand=Shoei", filterKey: "Shoei" },
+        { name: "HIU", href: "/helm?brand=HIU", filterKey: "HIU" },
+        { name: "Bogo", href: "/helm?brand=Bogo", filterKey: "Bogo" },
+      ],
+    },
+    {
+      category: "Kategori Helm",
+      items: [
+        { name: "Full Face", href: "/helm?type=full-face", filterKey: "full-face" },
+        { name: "Open Face", href: "/helm?type=open-face", filterKey: "open-face" },
+        { name: "Modular", href: "/helm?type=modular", filterKey: "modular" },
+        { name: "Racing", href: "/helm?type=racing", filterKey: "racing" },
+        { name: "Touring", href: "/helm?type=touring", filterKey: "touring" },
+        { name: "Urban", href: "/helm?type=urban", filterKey: "urban" },
+      ],
+    },
+    {
+      category: "Harga",
+      items: [
+        { name: "Di bawah 1 Juta", href: "/helm?price=under-1m", filterKey: "under-1m" },
+        { name: "1 - 1.5 Juta", href: "/helm?price=1m-1.5m", filterKey: "1m-1.5m" },
+        { name: "1.5 - 2 Juta", href: "/helm?price=1.5m-2m", filterKey: "1.5m-2m" },
+        { name: "Di atas 2 Juta", href: "/helm?price=above-2m", filterKey: "above-2m" },
+      ],
+    },
+    {
+      category: "Parts & Accessories",
+      items: [
+        { name: "Visor", href: "/helm?category=visor", filterKey: "visor" },
+        { name: "Padding", href: "/helm?category=padding", filterKey: "padding" },
+        { name: "Spare Parts", href: "/helm?category=parts", filterKey: "parts" },
+      ],
+    },
   ]
 
   const navItems = [
@@ -97,10 +97,16 @@ const Header = () => {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchQuery.trim()) {
-      // Redirect to helm page with search query
-      window.location.href = `/helm?search=${encodeURIComponent(searchQuery.trim())}`
+      // Navigate to helm page with search query
+      navigate(`/helm?search=${encodeURIComponent(searchQuery.trim())}`)
       setIsSearchOpen(false)
     }
+  }
+
+  const handleQuickSearch = (term: string) => {
+    setSearchQuery(term)
+    navigate(`/helm?search=${encodeURIComponent(term)}`)
+    setIsSearchOpen(false)
   }
 
   return (
@@ -131,7 +137,7 @@ const Header = () => {
                                 {categoryGroup.category}
                               </h4>
                               {/* Grid layout yang lebih rapi untuk brand */}
-                              <div className="grid grid-cols-5 gap-2">
+                              <div className={categoryGroup.category === "Brand Helm" ? "grid grid-cols-5 gap-2" : "grid grid-cols-3 gap-2"}>
                                 {categoryGroup.items.map((subItem, subIndex) => (
                                   <NavigationMenuLink key={subIndex} asChild>
                                     <Link
@@ -234,28 +240,28 @@ const Header = () => {
               <span className="text-sm text-gray-600">Pencarian populer:</span>
               <button 
                 type="button"
-                onClick={() => {setSearchQuery("KYT"); handleSearch({preventDefault: () => {}} as React.FormEvent)}}
+                onClick={() => handleQuickSearch("KYT")}
                 className="text-sm text-red-600 hover:underline"
               >
                 KYT
               </button>
               <button 
                 type="button"
-                onClick={() => {setSearchQuery("ARRAY"); handleSearch({preventDefault: () => {}} as React.FormEvent)}}
+                onClick={() => handleQuickSearch("ARRAY")}
                 className="text-sm text-red-600 hover:underline"
               >
                 ARRAY
               </button>
               <button 
                 type="button"
-                onClick={() => {setSearchQuery("Full Face"); handleSearch({preventDefault: () => {}} as React.FormEvent)}}
+                onClick={() => handleQuickSearch("Full Face")}
                 className="text-sm text-red-600 hover:underline"
               >
                 Full Face
               </button>
               <button 
                 type="button"
-                onClick={() => {setSearchQuery("Racing"); handleSearch({preventDefault: () => {}} as React.FormEvent)}}
+                onClick={() => handleQuickSearch("Racing")}
                 className="text-sm text-red-600 hover:underline"
               >
                 Racing

@@ -45,6 +45,29 @@ const Helm = () => {
       filtered = filtered.filter(helmet => helmet.brand === brandFilter)
     }
 
+    // Apply type filter (helmet type like full-face, open-face, etc.)
+    if (typeFilter) {
+      filtered = filtered.filter(helmet => {
+        const type = helmet.specifications?.type?.toLowerCase() || helmet.series.toLowerCase()
+        switch (typeFilter) {
+          case 'full-face':
+            return type.includes('full') || type.includes('face') || type.includes('fullface')
+          case 'open-face':
+            return type.includes('open') || type.includes('half')
+          case 'modular':
+            return type.includes('modular') || type.includes('flip')
+          case 'racing':
+            return type.includes('racing') || type.includes('sport') || type.includes('track')
+          case 'touring':
+            return type.includes('touring') || type.includes('adventure')
+          case 'urban':
+            return type.includes('urban') || type.includes('city') || type.includes('street')
+          default:
+            return false
+        }
+      })
+    }
+
     // Apply category filter
     if (categoryFilter) {
       filtered = filtered.filter(helmet => helmet.category === categoryFilter)
@@ -76,7 +99,8 @@ const Helm = () => {
         helmet.name.toLowerCase().includes(term) ||
         helmet.brand.toLowerCase().includes(term) ||
         helmet.series.toLowerCase().includes(term) ||
-        helmet.description?.toLowerCase().includes(term)
+        helmet.description?.toLowerCase().includes(term) ||
+        helmet.specifications?.type?.toLowerCase().includes(term)
       )
     }
 
@@ -114,6 +138,17 @@ const Helm = () => {
   // Get page title based on filters
   const getPageTitle = () => {
     if (brandFilter) return `Koleksi Helm ${brandFilter}`
+    if (typeFilter) {
+      switch (typeFilter) {
+        case 'full-face': return 'Helm Full Face'
+        case 'open-face': return 'Helm Open Face'
+        case 'modular': return 'Helm Modular'
+        case 'racing': return 'Helm Racing'
+        case 'touring': return 'Helm Touring'
+        case 'urban': return 'Helm Urban'
+        default: return 'Katalog Helm'
+      }
+    }
     if (categoryFilter === 'parts') return 'Parts & Accessories'
     if (priceFilter) {
       switch (priceFilter) {
@@ -159,6 +194,11 @@ const Helm = () => {
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const clearAllFilters = () => {
+    setLocalSearch('')
+    navigate('/helm')
   }
 
   const renderPagination = () => {
@@ -263,25 +303,40 @@ const Helm = () => {
                 Brand: {brandFilter}
               </Badge>
             )}
-            {priceFilter && (
+            {typeFilter && (
               <Badge variant="secondary" className="bg-blue-600 text-white border-blue-500">
+                Tipe: {typeFilter.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+              </Badge>
+            )}
+            {priceFilter && (
+              <Badge variant="secondary" className="bg-green-600 text-white border-green-500">
                 Harga: {priceFilter.replace('-', ' - ').replace('m', ' Juta')}
               </Badge>
             )}
             {categoryFilter && (
-              <Badge variant="secondary" className="bg-green-600 text-white border-green-500">
+              <Badge variant="secondary" className="bg-purple-600 text-white border-purple-500">
                 Kategori: {categoryFilter}
               </Badge>
             )}
             {(searchQuery || localSearch) && (
-              <Badge variant="secondary" className="bg-purple-600 text-white border-purple-500">
+              <Badge variant="secondary" className="bg-orange-600 text-white border-orange-500">
                 Pencarian: {searchQuery || localSearch}
               </Badge>
+            )}
+            {(brandFilter || typeFilter || priceFilter || categoryFilter || searchQuery || localSearch) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearAllFilters}
+                className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
+              >
+                Clear All
+              </Button>
             )}
           </div>
 
           <p className="text-gray-300">
-            Menampilkan {paginatedData.products.length} dari {paginatedData.totalProducts} produk 
+            Menampilkan {paginatedData.products.length} dari {paginatedData.totalProducts} produk
             (Halaman {paginatedData.currentPage} dari {paginatedData.totalPages})
           </p>
         </div>
@@ -380,6 +435,11 @@ const Helm = () => {
                       <Badge variant="secondary" className="text-xs bg-gray-700 text-gray-300">
                         {helmet.series}
                       </Badge>
+                      {helmet.specifications?.type && (
+                        <Badge variant="outline" className="text-xs bg-blue-600 text-white border-blue-500">
+                          {helmet.specifications.type}
+                        </Badge>
+                      )}
                     </div>
                     
                     <h3 
@@ -402,7 +462,7 @@ const Helm = () => {
                           {[...Array(5)].map((_, i) => (
                             <Star 
                               key={i} 
-                              className={`w-3 h-3 ${i < Math.floor(helmet.rating!) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-600'}`} 
+                              className={`w-3 h-3 ${i < Math.floor(helmet.rating!) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-600'}`}
                             />
                           ))}
                         </div>
@@ -432,6 +492,18 @@ const Helm = () => {
                       <p className="text-xs text-gray-400 mb-3">
                         Stok: {helmet.stock} tersedia
                       </p>
+                    )}
+
+                    {/* Quick Preview Info */}
+                    {helmet.specifications && (
+                      <div className="text-xs text-gray-500 mb-3">
+                        {helmet.specifications.weight && (
+                          <span className="mr-3">Berat: {helmet.specifications.weight}</span>
+                        )}
+                        {helmet.specifications.material && (
+                          <span>Material: {helmet.specifications.material}</span>
+                        )}
+                      </div>
                     )}
                   </div>
                   
@@ -480,10 +552,7 @@ const Helm = () => {
             <Button 
               variant="outline"
               className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
-              onClick={() => {
-                setLocalSearch('')
-                navigate('/helm')
-              }}
+              onClick={clearAllFilters}
             >
               Reset Filter
             </Button>
@@ -494,7 +563,7 @@ const Helm = () => {
         {renderPagination()}
 
         {/* Brand Showcase */}
-        {!brandFilter && !searchQuery && !localSearch && (
+        {!brandFilter && !searchQuery && !localSearch && !typeFilter && (
           <div className="mt-16 pt-16 border-t border-gray-700">
             <h2 className="text-3xl font-bold text-center mb-8 text-white">Brand Helm Terpercaya</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-6">
