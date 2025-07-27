@@ -8,8 +8,6 @@ export interface OrderData {
   items: CartItem[];
   total: number;
   customerInfo: CustomerInfo;
-  shippingCost?: number;
-  adminFee?: number;
 }
 
 export interface CartItem {
@@ -33,13 +31,15 @@ export interface CustomerInfo {
   cityId?: string;
 }
 
-// Midtrans configuration
+// Midtrans configuration - Using environment variables
 const MIDTRANS_CONFIG = {
-  clientKey: "Mid-client-wcUq_Ikil3zz7JmC", // Client key untuk frontend
-  serverKey: "Mid-server-Xj71tQsLY7yWY1kZZisNqadW", // Server key (seharusnya di backend)
-  merchantId: "G345387238",
-  isProduction: false, // Set true untuk production
-  snapUrl: "https://app.sandbox.midtrans.com/snap/snap.js" // Sandbox URL
+  clientKey: import.meta.env.VITE_MIDTRANS_CLIENT_KEY || "Mid-client-wcUq_Ikil3zz7JmC",
+  serverKey: import.meta.env.MIDTRANS_SERVER_KEY || "Mid-server-Xj71tQsLY7yWY1kZZisNqadW",
+  merchantId: import.meta.env.VITE_MIDTRANS_MERCHANT_ID || "G345387238",
+  isProduction: import.meta.env.VITE_MIDTRANS_IS_PRODUCTION === 'true',
+  snapUrl: import.meta.env.VITE_MIDTRANS_IS_PRODUCTION === 'true' 
+    ? "https://app.midtrans.com/snap/snap.js" 
+    : "https://app.sandbox.midtrans.com/snap/snap.js"
 };
 
 // Interface untuk Midtrans Snap
@@ -160,40 +160,17 @@ export class MidtransPayment {
 
   // Create transaction token via backend API
   private async createTransactionToken(orderData: OrderData): Promise<string> {
-    // Prepare item details including shipping and admin fee
-    const itemDetails = orderData.items.map(item => ({
-      id: item.id,
-      price: item.price,
-      quantity: item.quantity,
-      name: item.name
-    }));
-
-    // Add shipping cost as separate item if exists
-    if (orderData.shippingCost && orderData.shippingCost > 0) {
-      itemDetails.push({
-        id: 'SHIPPING',
-        price: orderData.shippingCost,
-        quantity: 1,
-        name: 'Biaya Pengiriman'
-      });
-    }
-
-    // Add admin fee as separate item if exists
-    if (orderData.adminFee && orderData.adminFee > 0) {
-      itemDetails.push({
-        id: 'ADMIN_FEE',
-        price: orderData.adminFee,
-        quantity: 1,
-        name: 'Biaya Admin'
-      });
-    }
-
     const payload: MidtransSnapPayload = {
       transaction_details: {
         order_id: orderData.orderId,
         gross_amount: orderData.total
       },
-      item_details: itemDetails,
+      item_details: orderData.items.map(item => ({
+        id: item.id,
+        price: item.price,
+        quantity: item.quantity,
+        name: item.name
+      })),
       customer_details: this.formatCustomerDetails(orderData),
       enabled_payments: [
         'credit_card', 
@@ -220,7 +197,7 @@ export class MidtransPayment {
     };
 
     try {
-      // Call backend API to create transaction using mock API for development
+      // Call backend API to create transaction - use production API
       const result = await midtransBackendAPI.createTransaction(payload);
       
       if (!result.token) {
@@ -230,7 +207,7 @@ export class MidtransPayment {
       return result.token;
     } catch (error) {
       console.error('Error creating transaction:', error);
-      throw new Error(`Gagal membuat transaksi: ${error.message}`);
+      throw new Error('Failed to create payment transaction. Please try again.');
     }
   }
 
@@ -244,9 +221,6 @@ export class MidtransPayment {
       
       // Create transaction token
       const snapToken = await this.createTransactionToken(orderData);
-      
-      // Save order data for reference
-      sessionStorage.setItem(`order_${orderData.orderId}`, JSON.stringify(orderData));
 
       // Use Snap to process payment
       window.snap.pay(snapToken, {
@@ -267,187 +241,60 @@ export class MidtransPayment {
           this.handlePaymentClose();
         }
       });
-
     } catch (error) {
-      console.error('Payment processing error:', error);
-      throw new Error(`Gagal memproses pembayaran: ${error.message}`);
-    }
-  }
-
-  // Handle payment success
-  private handlePaymentSuccess(orderData: OrderData, result: any) {
-    // Simpan hasil pembayaran
-    localStorage.setItem('last_payment_result', JSON.stringify({
-      ...result,
-      order_data: orderData,
-      timestamp: Date.now(),
-      status: 'success'
-    }));
-    
-    // Clear order from session storage
-    sessionStorage.removeItem(`order_${orderData.orderId}`);
-    
-    // Redirect ke halaman sukses dengan parameter yang lengkap
-    const params = new URLSearchParams({
-      order_id: orderData.orderId,
-      status: 'success',
-      transaction_id: result.transaction_id || result.order_id,
-      payment_type: result.payment_type || 'unknown',
-      gross_amount: orderData.total.toString()
-    });
-    
-    window.location.href = `/payment-success?${params.toString()}`;
-  }
-
-  // Handle payment pending
-  private handlePaymentPending(orderData: OrderData, result: any) {
-    // Simpan hasil pembayaran
-    localStorage.setItem('last_payment_result', JSON.stringify({
-      ...result,
-      order_data: orderData,
-      timestamp: Date.now(),
-      status: 'pending'
-    }));
-    
-    // Redirect ke halaman pending dengan parameter yang lengkap
-    const params = new URLSearchParams({
-      order_id: orderData.orderId,
-      status: 'pending',
-      transaction_id: result.transaction_id || result.order_id,
-      payment_type: result.payment_type || 'unknown',
-      va_number: result.va_numbers?.[0]?.va_number || '',
-      bank: result.va_numbers?.[0]?.bank || result.payment_type || ''
-    });
-    
-    window.location.href = `/payment-pending?${params.toString()}`;
-  }
-
-  // Handle payment error
-  private handlePaymentError(orderData: OrderData, result: any) {
-    console.error('Payment failed:', result);
-    
-    // Simpan error untuk debugging
-    localStorage.setItem('last_payment_error', JSON.stringify({
-      ...result,
-      order_data: orderData,
-      timestamp: Date.now()
-    }));
-    
-    // Show detailed error message
-    const errorMessage = result.status_message || 
-                        result.error_messages?.join(', ') || 
-                        'Terjadi kesalahan sistem';
-    
-    alert(`Pembayaran gagal: ${errorMessage}\n\nSilakan coba lagi atau hubungi customer service jika masalah berlanjut.`);
-  }
-
-  // Handle payment popup close
-  private handlePaymentClose() {
-    console.log('Payment cancelled by user');
-    // Tidak perlu redirect, biarkan user tetap di halaman checkout
-  }
-
-  // Verify payment status (untuk dipanggil dari halaman success/pending)
-  async verifyPaymentStatus(orderId: string): Promise<any> {
-    try {
-      const result = await midtransBackendAPI.getPaymentStatus(orderId);
-      return result;
-    } catch (error) {
-      console.error('Error verifying payment:', error);
-      
-      // Fallback: check localStorage for payment result
-      const lastPaymentResult = localStorage.getItem('last_payment_result');
-      if (lastPaymentResult) {
-        const paymentData = JSON.parse(lastPaymentResult);
-        if (paymentData.order_data?.orderId === orderId) {
-          return {
-            order_id: orderId,
-            transaction_status: paymentData.transaction_status || 'settlement',
-            payment_type: paymentData.payment_type || 'unknown',
-            fraud_status: paymentData.fraud_status || 'accept',
-            transaction_id: paymentData.transaction_id,
-            gross_amount: paymentData.order_data.total
-          };
-        }
-      }
-      
+      console.error('Error in processPayment:', error);
       throw error;
     }
   }
 
-  // Get payment result from localStorage
-  getLastPaymentResult(): any {
-    const result = localStorage.getItem('last_payment_result');
-    return result ? JSON.parse(result) : null;
+  // Handle successful payment
+  private handlePaymentSuccess(orderData: OrderData, result: any): void {
+    // Store payment result
+    sessionStorage.setItem('payment_result', JSON.stringify(result));
+    sessionStorage.setItem('order_data', JSON.stringify(orderData));
+    
+    // Redirect to success page
+    window.location.href = '/payment-success';
   }
 
-  // Clear payment result from localStorage
-  clearPaymentResult(): void {
-    localStorage.removeItem('last_payment_result');
-    localStorage.removeItem('last_payment_error');
+  // Handle pending payment
+  private handlePaymentPending(orderData: OrderData, result: any): void {
+    // Store payment result
+    sessionStorage.setItem('payment_result', JSON.stringify(result));
+    sessionStorage.setItem('order_data', JSON.stringify(orderData));
+    
+    // Redirect to pending page
+    window.location.href = '/payment-pending';
   }
 
-  // Get order data from sessionStorage
-  getOrderData(orderId: string): OrderData | null {
-    const orderData = sessionStorage.getItem(`order_${orderId}`);
-    return orderData ? JSON.parse(orderData) : null;
+  // Handle payment error
+  private handlePaymentError(orderData: OrderData, result: any): void {
+    console.error('Payment failed:', result);
+    
+    // Show error message
+    alert('Payment failed. Please try again.');
+  }
+
+  // Handle payment popup close
+  private handlePaymentClose(): void {
+    console.log('Payment popup was closed by user');
+    // Optionally show a message or redirect
+  }
+
+  // Check payment status
+  async checkPaymentStatus(orderId: string): Promise<any> {
+    try {
+      const result = await midtransBackendAPI.getPaymentStatus(orderId);
+      return result;
+    } catch (error) {
+      console.error('Error checking payment status:', error);
+      throw error;
+    }
   }
 }
 
-// Export singleton instance
+// Export instance
 export const midtransPayment = new MidtransPayment();
 
-// Utility functions
-export const formatCurrency = (amount: number): string => {
-  return `Rp ${amount.toLocaleString('id-ID')}`;
-};
-
-export const generateOrderId = (): string => {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substr(2, 5).toUpperCase();
-  return `HIDEKI-${timestamp}-${random}`;
-};
-
-export const getPaymentStatusText = (status: string): string => {
-  const statusMap: { [key: string]: string } = {
-    'capture': 'Pembayaran Berhasil',
-    'settlement': 'Pembayaran Berhasil',
-    'pending': 'Menunggu Pembayaran',
-    'deny': 'Pembayaran Ditolak',
-    'cancel': 'Pembayaran Dibatalkan',
-    'expire': 'Pembayaran Kedaluwarsa',
-    'failure': 'Pembayaran Gagal'
-  };
-  
-  return statusMap[status] || 'Status Tidak Dikenal';
-};
-
-export const getPaymentMethodText = (paymentType: string): string => {
-  const methodMap: { [key: string]: string } = {
-    'bank_transfer': 'Transfer Bank',
-    'echannel': 'Mandiri Bill Payment',
-    'permata_va': 'Permata Virtual Account',
-    'bca_va': 'BCA Virtual Account',
-    'bni_va': 'BNI Virtual Account',
-    'other_va': 'Virtual Account',
-    'gopay': 'GoPay',
-    'shopeepay': 'ShopeePay',
-    'credit_card': 'Kartu Kredit',
-    'cstore': 'Indomaret/Alfamart',
-    'akulaku': 'Akulaku'
-  };
-  
-  return methodMap[paymentType] || paymentType.replace('_', ' ').toUpperCase();
-};
-
-export const isPaymentSuccess = (status: string): boolean => {
-  return ['capture', 'settlement'].includes(status);
-};
-
-export const isPaymentPending = (status: string): boolean => {
-  return status === 'pending';
-};
-
-export const isPaymentFailed = (status: string): boolean => {
-  return ['deny', 'cancel', 'expire', 'failure'].includes(status);
-};
+// Export default untuk kompatibilitas
+export default midtransPayment;

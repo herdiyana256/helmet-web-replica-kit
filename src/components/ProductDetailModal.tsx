@@ -648,4 +648,3 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 }
 
 export default ProductDetailModal
-
