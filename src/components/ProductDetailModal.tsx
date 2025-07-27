@@ -262,10 +262,10 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     <Shield className="w-4 h-4 text-green-600" />
                     <span>Garansi resmi</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Truck className="w-4 h-4 text-blue-600" />
-                    <span>Gratis ongkir >2jt</span>
-                  </div>
+                                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Truck className="w-4 h-4 text-blue-600" />
+                      <span>Gratis ongkir {'>'} 2jt</span>
+                    </div>
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <RotateCcw className="w-4 h-4 text-purple-600" />
                     <span>7 hari retur</span>

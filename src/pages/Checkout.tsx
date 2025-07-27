@@ -62,12 +62,14 @@ const Checkout = () => {
   const [isLoadingShipping, setIsLoadingShipping] = useState(false);
   const [isLoadingCities, setIsLoadingCities] = useState(false);
 
+  // Form validation states
+  const [validationErrors, setValidationErrors] = useState<Partial<CustomerInfo>>({});
+  const [isFormValid, setIsFormValid] = useState(false);
+
   // Calculate totals
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const adminFee = 1000; // Biaya admin
-  const freeShippingThreshold = 2000000; // Free shipping above 2 million
-  const isFreeShipping = subtotal >= freeShippingThreshold;
-  const shippingCost = isFreeShipping ? 0 : (selectedShipping?.cost || 0);
+  const shippingCost = selectedShipping?.cost || 0;
   const total = subtotal + shippingCost + adminFee;
 
   // Load provinces on mount
@@ -119,14 +121,15 @@ const Checkout = () => {
       const loadShippingOptions = async () => {
         setIsLoadingShipping(true);
         try {
-          const weight = rajaOngkirService.calculateTotalWeight(cartItems, 1500); // 1.5kg per helmet
+          const weight = rajaOngkirService.calculateWeight(cartItems);
           const origin = "151"; // Jakarta Barat (asal pengiriman)
           const destination = customerInfo.cityId!;
           
-          const options = await rajaOngkirService.getAllShippingOptions(
+          const options = await rajaOngkirService.getShippingOptions(
             origin,
             destination,
-            weight
+            weight,
+            subtotal
           );
           setShippingOptions(options);
           
@@ -151,6 +154,66 @@ const Checkout = () => {
       setSelectedShipping(null);
     }
   }, [customerInfo.cityId, cartItems]);
+
+  // Form validation function
+  const validateForm = (info: CustomerInfo) => {
+    const errors: Partial<CustomerInfo> = {};
+    
+    // Name validation
+    if (!info.name || info.name.trim().length < 2) {
+      errors.name = 'Nama harus minimal 2 karakter';
+    } else if (!/^[a-zA-Z\s]+$/.test(info.name.trim())) {
+      errors.name = 'Nama hanya boleh mengandung huruf dan spasi';
+    }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!info.email) {
+      errors.email = 'Email wajib diisi';
+    } else if (!emailRegex.test(info.email)) {
+      errors.email = 'Format email tidak valid';
+    }
+    
+    // Phone validation
+    const phoneRegex = /^(\+62|62|0)[0-9]{9,13}$/;
+    if (!info.phone) {
+      errors.phone = 'Nomor telepon wajib diisi';
+    } else if (!phoneRegex.test(info.phone.replace(/\s+/g, ''))) {
+      errors.phone = 'Format nomor telepon Indonesia tidak valid';
+    }
+    
+    // Address validation
+    if (!info.address || info.address.trim().length < 10) {
+      errors.address = 'Alamat harus minimal 10 karakter';
+    }
+    
+    // City validation
+    if (!info.cityId) {
+      errors.city = 'Kota/Kabupaten wajib dipilih';
+    }
+    
+    // Province validation
+    if (!info.province) {
+      errors.province = 'Provinsi wajib dipilih';
+    }
+    
+    // Postal code validation
+    const postalRegex = /^[0-9]{5}$/;
+    if (!info.postalCode) {
+      errors.postalCode = 'Kode pos wajib diisi';
+    } else if (!postalRegex.test(info.postalCode)) {
+      errors.postalCode = 'Kode pos harus 5 digit angka';
+    }
+    
+    return errors;
+  };
+
+  // Real-time form validation
+  useEffect(() => {
+    const errors = validateForm(customerInfo);
+    setValidationErrors(errors);
+    setIsFormValid(Object.keys(errors).length === 0);
+  }, [customerInfo]);
 
   const handleUpdateQuantity = (id: string, quantity: number) => {
     if (quantity < 1) return;
@@ -222,37 +285,18 @@ const Checkout = () => {
   };
 
   const validateCustomerInfo = (): boolean => {
-    const required = ['name', 'email', 'phone', 'address', 'province', 'cityId', 'postalCode'];
-    for (const field of required) {
-      if (!customerInfo[field as keyof CustomerInfo]) {
-        toast({
-          title: "Data Tidak Lengkap",
-          description: `Silakan lengkapi ${field === 'cityId' ? 'kota' : field}`,
-          variant: "destructive"
-        });
-        return false;
-      }
-    }
+    // Use enhanced validation function
+    const validationErrors = validateForm(customerInfo);
     
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(customerInfo.email)) {
+    if (Object.keys(validationErrors).length > 0) {
+      // Show specific error for first field that has error
+      const firstError = Object.entries(validationErrors)[0];
       toast({
-        title: "Email Tidak Valid",
-        description: "Silakan masukkan alamat email yang valid",
+        title: "Data Tidak Valid",
+        description: firstError[1],
         variant: "destructive"
       });
-      return false;
-    }
-
-    // Validate phone format
-    const phoneRegex = /^[0-9+\-\s()]+$/;
-    if (!phoneRegex.test(customerInfo.phone)) {
-      toast({
-        title: "Nomor Telepon Tidak Valid",
-        description: "Silakan masukkan nomor telepon yang valid",
-        variant: "destructive"
-      });
+      setValidationErrors(validationErrors);
       return false;
     }
 
@@ -261,6 +305,27 @@ const Checkout = () => {
       toast({
         title: "Pilih Metode Pengiriman",
         description: "Silakan pilih metode pengiriman terlebih dahulu",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    // Validate cart items
+    if (cartItems.length === 0) {
+      toast({
+        title: "Keranjang Kosong",
+        description: "Silakan tambahkan produk ke keranjang terlebih dahulu",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    // Additional cart validation
+    const invalidItems = cartItems.filter(item => !item.name || !item.price || item.quantity <= 0);
+    if (invalidItems.length > 0) {
+      toast({
+        title: "Item Tidak Valid",
+        description: "Terdapat item di keranjang yang tidak valid",
         variant: "destructive"
       });
       return false;
@@ -275,46 +340,25 @@ const Checkout = () => {
     setIsProcessingPayment(true);
     
     try {
-      const orderId = `HIDEKI-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-      
       const orderData: OrderData = {
-        orderId: orderId,
-        items: cartItems.map(item => ({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-          brand: item.brand,
-          size: item.size
-        })),
+        orderId: `HIDEKI-${Date.now()}`,
+        items: cartItems,
         total: total,
         customerInfo: customerInfo,
         shippingCost: shippingCost,
         adminFee: adminFee
       };
 
-      console.log('Initiating payment with order data:', orderData);
-      
       await midtransPayment.processPayment(orderData);
       
       // Clear cart after successful payment initiation
       clearCart();
       
-      toast({
-        title: "Pembayaran Diproses",
-        description: `Order ${orderId} sedang diproses. Anda akan diarahkan ke halaman pembayaran.`,
-      });
-      
     } catch (error) {
       console.error('Payment error:', error);
-      
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : "Terjadi kesalahan saat memproses pembayaran. Silakan coba lagi.";
-      
       toast({
         title: "Gagal Memproses Pembayaran",
-        description: errorMessage,
+        description: "Terjadi kesalahan saat memproses pembayaran. Silakan coba lagi.",
         variant: "destructive"
       });
     } finally {
@@ -537,7 +581,11 @@ const Checkout = () => {
                             value={customerInfo.name}
                             onChange={(e) => handleCustomerInfoChange('name', e.target.value)}
                             placeholder="Masukkan nama lengkap"
+                            className={validationErrors.name ? 'border-red-500' : ''}
                           />
+                          {validationErrors.name && (
+                            <p className="text-red-500 text-sm mt-1">{validationErrors.name}</p>
+                          )}
                         </div>
                         <div>
                           <Label htmlFor="email">Email *</Label>
@@ -547,7 +595,11 @@ const Checkout = () => {
                             value={customerInfo.email}
                             onChange={(e) => handleCustomerInfoChange('email', e.target.value)}
                             placeholder="contoh@email.com"
+                            className={validationErrors.email ? 'border-red-500' : ''}
                           />
+                          {validationErrors.email && (
+                            <p className="text-red-500 text-sm mt-1">{validationErrors.email}</p>
+                          )}
                         </div>
                       </div>
                       <div>
@@ -557,7 +609,11 @@ const Checkout = () => {
                           value={customerInfo.phone}
                           onChange={(e) => handleCustomerInfoChange('phone', e.target.value)}
                           placeholder="08xxxxxxxxxx"
+                          className={validationErrors.phone ? 'border-red-500' : ''}
                         />
+                        {validationErrors.phone && (
+                          <p className="text-red-500 text-sm mt-1">{validationErrors.phone}</p>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -574,7 +630,7 @@ const Checkout = () => {
                         <div>
                           <Label htmlFor="province">Provinsi *</Label>
                           <Select value={customerInfo.province} onValueChange={handleProvinceChange}>
-                            <SelectTrigger>
+                            <SelectTrigger className={validationErrors.province ? 'border-red-500' : ''}>
                               <SelectValue placeholder="Pilih provinsi" />
                             </SelectTrigger>
                             <SelectContent>
@@ -585,6 +641,9 @@ const Checkout = () => {
                               ))}
                             </SelectContent>
                           </Select>
+                          {validationErrors.province && (
+                            <p className="text-red-500 text-sm mt-1">{validationErrors.province}</p>
+                          )}
                         </div>
                         <div>
                           <Label htmlFor="city">Kota/Kabupaten *</Label>
@@ -593,7 +652,7 @@ const Checkout = () => {
                             onValueChange={handleCityChange}
                             disabled={!customerInfo.province || isLoadingCities}
                           >
-                            <SelectTrigger>
+                            <SelectTrigger className={validationErrors.city ? 'border-red-500' : ''}>
                               <SelectValue placeholder={
                                 isLoadingCities ? "Memuat kota..." : 
                                 !customerInfo.province ? "Pilih provinsi dulu" : 
@@ -608,6 +667,9 @@ const Checkout = () => {
                               ))}
                             </SelectContent>
                           </Select>
+                          {validationErrors.city && (
+                            <p className="text-red-500 text-sm mt-1">{validationErrors.city}</p>
+                          )}
                         </div>
                       </div>
                       <div>
@@ -618,7 +680,11 @@ const Checkout = () => {
                           onChange={(e) => handleCustomerInfoChange('address', e.target.value)}
                           placeholder="Masukkan alamat lengkap termasuk nama jalan, nomor rumah, RT/RW"
                           rows={3}
+                          className={validationErrors.address ? 'border-red-500' : ''}
                         />
+                        {validationErrors.address && (
+                          <p className="text-red-500 text-sm mt-1">{validationErrors.address}</p>
+                        )}
                       </div>
                       <div>
                         <Label htmlFor="postalCode">Kode Pos *</Label>
@@ -627,7 +693,11 @@ const Checkout = () => {
                           value={customerInfo.postalCode}
                           onChange={(e) => handleCustomerInfoChange('postalCode', e.target.value)}
                           placeholder="12345"
+                          className={validationErrors.postalCode ? 'border-red-500' : ''}
                         />
+                        {validationErrors.postalCode && (
+                          <p className="text-red-500 text-sm mt-1">{validationErrors.postalCode}</p>
+                        )}
                       </div>
                       <div>
                         <Label htmlFor="notes">Catatan Tambahan</Label>
@@ -667,7 +737,7 @@ const Checkout = () => {
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <p className="font-medium">
-                                      {option.courier} - {option.service}
+                                      {option.courierName} - {option.service}
                                     </p>
                                     <p className="text-sm text-gray-600">
                                       {option.description}
@@ -747,8 +817,7 @@ const Checkout = () => {
                       <div className="flex justify-between">
                         <span>Ongkos Kirim</span>
                         <span className={shippingCost === 0 ? 'text-green-600' : ''}>
-                          {isFreeShipping ? 'GRATIS' : 
-                           shippingCost === 0 ? 'GRATIS' : 
+                          {shippingCost === 0 ? 'GRATIS' : 
                            selectedShipping ? `Rp ${shippingCost.toLocaleString('id-ID')}` : 
                            'Pilih pengiriman'}
                         </span>
@@ -757,14 +826,9 @@ const Checkout = () => {
                         <span>Biaya Admin</span>
                         <span>Rp {adminFee.toLocaleString('id-ID')}</span>
                       </div>
-                      {isFreeShipping && (
+                      {selectedShipping && shippingCost === 0 && (
                         <p className="text-sm text-green-600">
-                          🎉 Selamat! Anda mendapat gratis ongkir (belanja > Rp 2jt)
-                        </p>
-                      )}
-                      {!isFreeShipping && subtotal > 1500000 && (
-                        <p className="text-sm text-blue-600">
-                          💡 Belanja Rp {(freeShippingThreshold - subtotal).toLocaleString('id-ID')} lagi untuk gratis ongkir!
+                          🎉 Selamat! Anda mendapat gratis ongkir
                         </p>
                       )}
                       <Separator />
