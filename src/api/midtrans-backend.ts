@@ -1,5 +1,5 @@
 // Backend API endpoints untuk Midtrans integration
-// File ini akan digunakan untuk membuat mock backend atau sebagai referensi untuk implementasi backend
+// Production implementation untuk real payment processing
 
 export interface CreateTransactionRequest {
   transaction_details: {
@@ -60,33 +60,24 @@ export interface PaymentStatusResponse {
   transaction_time: string;
 }
 
-// Mock API implementation untuk development
+// Production API implementation
 class MidtransBackendAPI {
-  private serverKey = "Mid-server-Xj71tQsLY7yWY1kZZisNqadW";
-  private isProduction = false;
+  private serverKey = import.meta.env.MIDTRANS_SERVER_KEY || "Mid-server-Xj71tQsLY7yWY1kZZisNqadW";
+  private isProduction = import.meta.env.VITE_MIDTRANS_IS_PRODUCTION === 'true';
   private baseUrl = this.isProduction 
     ? "https://api.midtrans.com/v2" 
     : "https://api.sandbox.midtrans.com/v2";
+  private snapUrl = this.isProduction
+    ? "https://app.midtrans.com/snap/v1/transactions"
+    : "https://app.sandbox.midtrans.com/snap/v1/transactions";
 
-  // Create transaction token
+  // Create transaction token via Midtrans Snap API
   async createTransaction(payload: CreateTransactionRequest): Promise<CreateTransactionResponse> {
-    // Untuk development, kita akan membuat mock response
-    // Pada production, ini harus diganti dengan call ke Midtrans API yang sebenarnya
-    
     try {
-      // Mock successful response
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      console.log('Creating transaction with Midtrans API...');
       
-      const mockToken = `mock-token-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      return {
-        token: mockToken,
-        redirect_url: `https://app.sandbox.midtrans.com/snap/v2/vtweb/${mockToken}`
-      };
-      
-      // Production implementation:
-      /*
-      const response = await fetch(`${this.baseUrl}/charge`, {
+      // Prepare the request to Midtrans Snap API
+      const response = await fetch(this.snapUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${btoa(this.serverKey + ':')}`,
@@ -98,229 +89,205 @@ class MidtransBackendAPI {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(`Midtrans API error: ${errorData.error_messages?.[0] || 'Unknown error'}`);
+        console.error('Midtrans API error:', errorData);
+        throw new Error(errorData.error_messages?.[0] || 'Failed to create transaction');
       }
 
-      return await response.json();
-      */
+      const result = await response.json();
+      
+      if (!result.token) {
+        throw new Error('No token received from Midtrans');
+      }
+
+      console.log('Transaction created successfully');
+      return {
+        token: result.token,
+        redirect_url: result.redirect_url
+      };
+
     } catch (error) {
       console.error('Error creating transaction:', error);
-      throw new Error(`Failed to create transaction: ${error.message}`);
+      
+      // For development/fallback, you can uncomment the lines below
+      // But for production, always throw the error
+      throw error;
+      
+      // Development fallback (uncomment for testing):
+      /*
+      console.warn('Using fallback for development');
+      const mockToken = `mock-token-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      return {
+        token: mockToken,
+        redirect_url: `https://app.midtrans.com/snap/v2/vtweb/${mockToken}`
+      };
+      */
     }
   }
 
-  // Get payment status
+  // Get payment status from Midtrans
   async getPaymentStatus(orderId: string): Promise<PaymentStatusResponse> {
     try {
-      // Mock successful response
-      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('Checking payment status for order:', orderId);
       
-      return {
-        order_id: orderId,
-        transaction_status: 'settlement',
-        payment_type: 'bank_transfer',
-        fraud_status: 'accept',
-        transaction_id: `TXN-${Date.now()}`,
-        gross_amount: '100000',
-        status_message: 'Success, transaction is found',
-        transaction_time: new Date().toISOString()
-      };
-
-      // Production implementation:
-      /*
       const response = await fetch(`${this.baseUrl}/${orderId}/status`, {
+        method: 'GET',
         headers: {
           'Authorization': `Basic ${btoa(this.serverKey + ':')}`,
+          'Content-Type': 'application/json',
           'Accept': 'application/json'
         }
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(`Midtrans API error: ${errorData.error_messages?.[0] || 'Unknown error'}`);
+        console.error('Error checking payment status:', errorData);
+        throw new Error(errorData.error_messages?.[0] || 'Failed to check payment status');
       }
 
-      return await response.json();
-      */
+      const result = await response.json();
+      
+      return {
+        order_id: result.order_id,
+        transaction_status: result.transaction_status,
+        payment_type: result.payment_type,
+        fraud_status: result.fraud_status,
+        transaction_id: result.transaction_id,
+        gross_amount: result.gross_amount,
+        status_message: result.status_message,
+        transaction_time: result.transaction_time
+      };
+
     } catch (error) {
       console.error('Error getting payment status:', error);
-      throw new Error(`Failed to get payment status: ${error.message}`);
+      throw error;
     }
   }
 
-  // Handle webhook notification from Midtrans
-  async handleWebhook(notificationData: any): Promise<PaymentStatusResponse> {
+  // Cancel transaction
+  async cancelTransaction(orderId: string): Promise<any> {
     try {
-      // Verify notification authenticity
-      const isValidNotification = await this.verifyNotification(notificationData);
+      console.log('Cancelling transaction for order:', orderId);
       
-      if (!isValidNotification) {
-        throw new Error('Invalid notification signature');
+      const response = await fetch(`${this.baseUrl}/${orderId}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${btoa(this.serverKey + ':')}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error cancelling transaction:', errorData);
+        throw new Error(errorData.error_messages?.[0] || 'Failed to cancel transaction');
       }
 
-      // Get full transaction status
-      return await this.getPaymentStatus(notificationData.order_id);
+      const result = await response.json();
+      console.log('Transaction cancelled successfully');
+      
+      return result;
+
     } catch (error) {
-      console.error('Error handling webhook:', error);
-      throw new Error(`Failed to handle webhook: ${error.message}`);
+      console.error('Error cancelling transaction:', error);
+      throw error;
     }
   }
 
-  // Verify notification signature
-  private async verifyNotification(notificationData: any): Promise<boolean> {
-    // Production implementation would verify the signature hash
-    // For mock purposes, we'll return true
-    return true;
-    
-    /*
-    const orderId = notificationData.order_id;
-    const statusCode = notificationData.status_code;
-    const grossAmount = notificationData.gross_amount;
-    const signatureKey = notificationData.signature_key;
+  // Refund transaction
+  async refundTransaction(orderId: string, amount?: number, reason?: string): Promise<any> {
+    try {
+      console.log('Processing refund for order:', orderId);
+      
+      const refundData: any = {};
+      if (amount) refundData.refund_amount = amount;
+      if (reason) refundData.reason = reason;
+      
+      const response = await fetch(`${this.baseUrl}/${orderId}/refund`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${btoa(this.serverKey + ':')}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(refundData)
+      });
 
-    const expectedSignature = crypto
-      .createHash('sha512')
-      .update(orderId + statusCode + grossAmount + this.serverKey)
-      .digest('hex');
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error processing refund:', errorData);
+        throw new Error(errorData.error_messages?.[0] || 'Failed to process refund');
+      }
 
-    return signatureKey === expectedSignature;
-    */
+      const result = await response.json();
+      console.log('Refund processed successfully');
+      
+      return result;
+
+    } catch (error) {
+      console.error('Error processing refund:', error);
+      throw error;
+    }
   }
 }
 
 // Export singleton instance
 export const midtransBackendAPI = new MidtransBackendAPI();
 
-// Express.js route handlers (untuk referensi backend implementation)
-export const createMidtransRoutes = () => {
-  const routes = {
-    // POST /api/create-transaction
-    createTransaction: async (req: any, res: any) => {
-      try {
-        const result = await midtransBackendAPI.createTransaction(req.body);
-        res.json(result);
-      } catch (error) {
-        res.status(500).json({ 
-          error: true, 
-          message: error.message 
-        });
-      }
-    },
+// Export default untuk kompatibilitas
+export default midtransBackendAPI;
 
-    // GET /api/payment-status/:orderId
-    getPaymentStatus: async (req: any, res: any) => {
-      try {
-        const { orderId } = req.params;
-        const result = await midtransBackendAPI.getPaymentStatus(orderId);
-        res.json(result);
-      } catch (error) {
-        res.status(500).json({ 
-          error: true, 
-          message: error.message 
-        });
-      }
-    },
+// Utility functions untuk payment processing
+export const generateOrderId = (): string => {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substr(2, 5).toUpperCase();
+  return `HIDEKI-${timestamp}-${random}`;
+};
 
-    // POST /api/midtrans-webhook
-    handleWebhook: async (req: any, res: any) => {
-      try {
-        const result = await midtransBackendAPI.handleWebhook(req.body);
-        
-        // Update order status in database based on payment status
-        await updateOrderStatus(result.order_id, result.transaction_status);
-        
-        res.json({ status: 'ok' });
-      } catch (error) {
-        res.status(500).json({ 
-          error: true, 
-          message: error.message 
-        });
-      }
-    }
+export const formatCurrency = (amount: number): string => {
+  return `Rp ${amount.toLocaleString('id-ID')}`;
+};
+
+export const getPaymentStatusText = (status: string): string => {
+  const statusMap: { [key: string]: string } = {
+    'capture': 'Pembayaran Berhasil',
+    'settlement': 'Pembayaran Berhasil',
+    'pending': 'Menunggu Pembayaran',
+    'deny': 'Pembayaran Ditolak',
+    'cancel': 'Pembayaran Dibatalkan',
+    'expire': 'Pembayaran Kedaluwarsa',
+    'failure': 'Pembayaran Gagal'
   };
-
-  return routes;
-};
-
-// Helper function to update order status (implement based on your database)
-async function updateOrderStatus(orderId: string, status: string) {
-  // Implement database update logic here
-  console.log(`Updating order ${orderId} status to: ${status}`);
   
-  // Example implementation:
-  /*
-  await database.orders.update(
-    { order_id: orderId },
-    { 
-      payment_status: status,
-      updated_at: new Date()
-    }
-  );
-  */
-}
-
-// Utility functions for frontend integration
-export const mockBackendEndpoints = {
-  createTransaction: async (payload: CreateTransactionRequest): Promise<CreateTransactionResponse> => {
-    // Simulate network request
-    const response = await fetch('/api/create-transaction', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to create transaction');
-    }
-
-    return await response.json();
-  },
-
-  getPaymentStatus: async (orderId: string): Promise<PaymentStatusResponse> => {
-    const response = await fetch(`/api/payment-status/${orderId}`);
-    
-    if (!response.ok) {
-      throw new Error('Failed to get payment status');
-    }
-
-    return await response.json();
-  }
+  return statusMap[status] || 'Status Tidak Dikenal';
 };
 
-// Development server setup instructions
-export const setupInstructions = `
-To setup backend for Midtrans integration:
+export const getPaymentMethodText = (paymentType: string): string => {
+  const methodMap: { [key: string]: string } = {
+    'bank_transfer': 'Transfer Bank',
+    'echannel': 'Mandiri Bill Payment',
+    'permata_va': 'Permata Virtual Account',
+    'bca_va': 'BCA Virtual Account',
+    'bni_va': 'BNI Virtual Account',
+    'other_va': 'Virtual Account',
+    'gopay': 'GoPay',
+    'shopeepay': 'ShopeePay',
+    'credit_card': 'Kartu Kredit',
+    'cstore': 'Indomaret/Alfamart',
+    'akulaku': 'Akulaku'
+  };
+  
+  return methodMap[paymentType] || paymentType.replace('_', ' ').toUpperCase();
+};
 
-1. Install required dependencies:
-   npm install express cors body-parser crypto
+export const isPaymentSuccess = (status: string): boolean => {
+  return ['capture', 'settlement'].includes(status);
+};
 
-2. Create backend server (server.js):
-   const express = require('express');
-   const cors = require('cors');
-   const { createMidtransRoutes } = require('./src/api/midtrans-backend');
-   
-   const app = express();
-   app.use(cors());
-   app.use(express.json());
-   
-   const midtransRoutes = createMidtransRoutes();
-   app.post('/api/create-transaction', midtransRoutes.createTransaction);
-   app.get('/api/payment-status/:orderId', midtransRoutes.getPaymentStatus);
-   app.post('/api/midtrans-webhook', midtransRoutes.handleWebhook);
-   
-   app.listen(3001, () => {
-     console.log('Backend server running on port 3001');
-   });
+export const isPaymentPending = (status: string): boolean => {
+  return status === 'pending';
+};
 
-3. Update frontend to use real backend:
-   - Change baseUrl in midtrans.ts to 'http://localhost:3001'
-   - Remove mock implementation and use real API calls
-
-4. Production deployment:
-   - Use environment variables for Midtrans credentials
-   - Implement proper database integration
-   - Setup SSL certificate for webhook endpoint
-   - Configure proper CORS settings
-`;
+export const isPaymentFailed = (status: string): boolean => {
+  return ['deny', 'cancel', 'expire', 'failure'].includes(status);
+};

@@ -65,7 +65,9 @@ const Checkout = () => {
   // Calculate totals
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const adminFee = 1000; // Biaya admin
-  const shippingCost = selectedShipping?.cost || 0;
+  const freeShippingThreshold = 2000000; // Free shipping above 2 million
+  const isFreeShipping = subtotal >= freeShippingThreshold;
+  const shippingCost = isFreeShipping ? 0 : (selectedShipping?.cost || 0);
   const total = subtotal + shippingCost + adminFee;
 
   // Load provinces on mount
@@ -117,15 +119,14 @@ const Checkout = () => {
       const loadShippingOptions = async () => {
         setIsLoadingShipping(true);
         try {
-          const weight = rajaOngkirService.calculateWeight(cartItems);
+          const weight = rajaOngkirService.calculateTotalWeight(cartItems, 1500); // 1.5kg per helmet
           const origin = "151"; // Jakarta Barat (asal pengiriman)
           const destination = customerInfo.cityId!;
           
-          const options = await rajaOngkirService.getShippingOptions(
+          const options = await rajaOngkirService.getAllShippingOptions(
             origin,
             destination,
-            weight,
-            subtotal
+            weight
           );
           setShippingOptions(options);
           
@@ -274,25 +275,46 @@ const Checkout = () => {
     setIsProcessingPayment(true);
     
     try {
+      const orderId = `HIDEKI-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+      
       const orderData: OrderData = {
-        orderId: `HIDEKI-${Date.now()}`,
-        items: cartItems,
+        orderId: orderId,
+        items: cartItems.map(item => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          brand: item.brand,
+          size: item.size
+        })),
         total: total,
         customerInfo: customerInfo,
         shippingCost: shippingCost,
         adminFee: adminFee
       };
 
+      console.log('Initiating payment with order data:', orderData);
+      
       await midtransPayment.processPayment(orderData);
       
       // Clear cart after successful payment initiation
       clearCart();
       
+      toast({
+        title: "Pembayaran Diproses",
+        description: `Order ${orderId} sedang diproses. Anda akan diarahkan ke halaman pembayaran.`,
+      });
+      
     } catch (error) {
       console.error('Payment error:', error);
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Terjadi kesalahan saat memproses pembayaran. Silakan coba lagi.";
+      
       toast({
         title: "Gagal Memproses Pembayaran",
-        description: "Terjadi kesalahan saat memproses pembayaran. Silakan coba lagi.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -645,7 +667,7 @@ const Checkout = () => {
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <p className="font-medium">
-                                      {option.courierName} - {option.service}
+                                      {option.courier} - {option.service}
                                     </p>
                                     <p className="text-sm text-gray-600">
                                       {option.description}
@@ -725,7 +747,8 @@ const Checkout = () => {
                       <div className="flex justify-between">
                         <span>Ongkos Kirim</span>
                         <span className={shippingCost === 0 ? 'text-green-600' : ''}>
-                          {shippingCost === 0 ? 'GRATIS' : 
+                          {isFreeShipping ? 'GRATIS' : 
+                           shippingCost === 0 ? 'GRATIS' : 
                            selectedShipping ? `Rp ${shippingCost.toLocaleString('id-ID')}` : 
                            'Pilih pengiriman'}
                         </span>
@@ -734,9 +757,14 @@ const Checkout = () => {
                         <span>Biaya Admin</span>
                         <span>Rp {adminFee.toLocaleString('id-ID')}</span>
                       </div>
-                      {selectedShipping && shippingCost === 0 && (
+                      {isFreeShipping && (
                         <p className="text-sm text-green-600">
-                          🎉 Selamat! Anda mendapat gratis ongkir
+                          🎉 Selamat! Anda mendapat gratis ongkir (belanja > Rp 2jt)
+                        </p>
+                      )}
+                      {!isFreeShipping && subtotal > 1500000 && (
+                        <p className="text-sm text-blue-600">
+                          💡 Belanja Rp {(freeShippingThreshold - subtotal).toLocaleString('id-ID')} lagi untuk gratis ongkir!
                         </p>
                       )}
                       <Separator />
