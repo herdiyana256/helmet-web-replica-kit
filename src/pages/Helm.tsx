@@ -1,7 +1,7 @@
 "use client"
 
-import { useSearchParams, useNavigate } from "react-router-dom"
-import { useMemo, useState } from "react"
+import { useSearchParams, useNavigate, useParams } from "react-router-dom"
+import { useMemo, useState, useEffect } from "react"
 import Header from "@/components/Header"
 import Footer from "@/components/Footer"
 import ProductDetailModal from "@/components/ProductDetailModal"
@@ -19,6 +19,7 @@ const Helm = () => {
   const { toast } = useToast()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { productId } = useParams()
   const { addItem } = useCartStore()
   
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -130,6 +131,27 @@ const Helm = () => {
   const handleProductClick = (product: Product) => {
     setSelectedProduct(product)
     setIsModalOpen(true)
+    // Update URL to include product ID
+    navigate(`/helm/${product.id}?${searchParams.toString()}`, { replace: true })
+  }
+
+  // Handle direct product URL access
+  useEffect(() => {
+    if (productId && !isModalOpen) {
+      const product = helmetsData.find(p => p.id === productId)
+      if (product) {
+        setSelectedProduct(product)
+        setIsModalOpen(true)
+      }
+    }
+  }, [productId, isModalOpen])
+
+  // Handle modal close
+  const handleModalClose = () => {
+    setIsModalOpen(false)
+    setSelectedProduct(null)
+    // Remove product ID from URL
+    navigate(`/helm?${searchParams.toString()}`, { replace: true })
   }
 
   const handleAddToCart = (product: Omit<Product, 'series' | 'category'> & { selectedSize?: string; quantity?: number }) => {
@@ -523,10 +545,7 @@ const Helm = () => {
       <ProductDetailModal
         product={selectedProduct}
         isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false)
-          setSelectedProduct(null)
-        }}
+        onClose={handleModalClose}
         onAddToCart={handleAddToCart}
       />
     </div>
