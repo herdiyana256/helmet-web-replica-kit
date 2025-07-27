@@ -8,8 +8,6 @@ export interface OrderData {
   items: CartItem[];
   total: number;
   customerInfo: CustomerInfo;
-  shippingCost?: number;
-  adminFee?: number;
 }
 
 export interface CartItem {
@@ -160,40 +158,17 @@ export class MidtransPayment {
 
   // Create transaction token via backend API
   private async createTransactionToken(orderData: OrderData): Promise<string> {
-    // Prepare item details including shipping and admin fee
-    const itemDetails = orderData.items.map(item => ({
-      id: item.id,
-      price: item.price,
-      quantity: item.quantity,
-      name: item.name
-    }));
-
-    // Add shipping cost as separate item if exists
-    if (orderData.shippingCost && orderData.shippingCost > 0) {
-      itemDetails.push({
-        id: 'SHIPPING',
-        price: orderData.shippingCost,
-        quantity: 1,
-        name: 'Biaya Pengiriman'
-      });
-    }
-
-    // Add admin fee as separate item if exists
-    if (orderData.adminFee && orderData.adminFee > 0) {
-      itemDetails.push({
-        id: 'ADMIN_FEE',
-        price: orderData.adminFee,
-        quantity: 1,
-        name: 'Biaya Admin'
-      });
-    }
-
     const payload: MidtransSnapPayload = {
       transaction_details: {
         order_id: orderData.orderId,
         gross_amount: orderData.total
       },
-      item_details: itemDetails,
+      item_details: orderData.items.map(item => ({
+        id: item.id,
+        price: item.price,
+        quantity: item.quantity,
+        name: item.name
+      })),
       customer_details: this.formatCustomerDetails(orderData),
       enabled_payments: [
         'credit_card', 
@@ -220,6 +195,7 @@ export class MidtransPayment {
     };
 
     try {
+<<<<<<< Updated upstream
       // Call backend API to create transaction using mock API for development
       const result = await midtransBackendAPI.createTransaction(payload);
       
@@ -227,11 +203,45 @@ export class MidtransPayment {
         throw new Error('No token received from Midtrans');
       }
 
+=======
+      // Dalam implementasi nyata, ini harus dikirim ke backend API Anda
+      // Backend yang akan berkomunikasi dengan Midtrans menggunakan server key
+      const response = await fetch('/api/create-transaction', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        // Fallback: simulasi response untuk demo
+        // JANGAN gunakan ini di production!
+        console.warn('Backend API tidak tersedia, menggunakan mock token untuk demo');
+        return this.createMockToken(orderData);
+      }
+
+      const result = await response.json();
+>>>>>>> Stashed changes
       return result.token;
     } catch (error) {
       console.error('Error creating transaction:', error);
-      throw new Error(`Gagal membuat transaksi: ${error.message}`);
+      // Fallback untuk demo
+      return this.createMockToken(orderData);
     }
+  }
+
+  // Mock token creation untuk demo (JANGAN gunakan di production!)
+  private createMockToken(orderData: OrderData): string {
+    console.warn('Menggunakan mock token - JANGAN gunakan di production!');
+    
+    // Simulasi pembuatan token
+    const mockToken = `mock_token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Simpan order data untuk referensi
+    sessionStorage.setItem(`order_${orderData.orderId}`, JSON.stringify(orderData));
+    
+    return mockToken;
   }
 
   // Process payment menggunakan Snap
@@ -245,8 +255,11 @@ export class MidtransPayment {
       // Create transaction token
       const snapToken = await this.createTransactionToken(orderData);
       
-      // Save order data for reference
-      sessionStorage.setItem(`order_${orderData.orderId}`, JSON.stringify(orderData));
+      if (snapToken.startsWith('mock_token_')) {
+        // Handle mock payment untuk demo
+        this.handleMockPayment(orderData, snapToken);
+        return;
+      }
 
       // Use Snap to process payment
       window.snap.pay(snapToken, {
@@ -270,7 +283,38 @@ export class MidtransPayment {
 
     } catch (error) {
       console.error('Payment processing error:', error);
-      throw new Error(`Gagal memproses pembayaran: ${error.message}`);
+      throw new Error('Gagal memproses pembayaran. Silakan coba lagi.');
+    }
+  }
+
+  // Handle mock payment untuk demo
+  private handleMockPayment(orderData: OrderData, mockToken: string) {
+    console.log('Handling mock payment with token:', mockToken);
+    
+    // Simulasi dialog pembayaran
+    const paymentMethods = [
+      'Transfer Bank BCA',
+      'Transfer Bank Mandiri', 
+      'Transfer Bank BNI',
+      'GoPay',
+      'ShopeePay',
+      'Credit Card'
+    ];
+    
+    const selectedMethod = paymentMethods[Math.floor(Math.random() * paymentMethods.length)];
+    
+    if (confirm(`Demo Payment\n\nOrder: ${orderData.orderId}\nTotal: Rp ${orderData.total.toLocaleString('id-ID')}\nMetode: ${selectedMethod}\n\nLanjutkan pembayaran?`)) {
+      // Simulasi pembayaran berhasil
+      setTimeout(() => {
+        this.handlePaymentSuccess(orderData, {
+          order_id: orderData.orderId,
+          payment_type: selectedMethod.toLowerCase().replace(/\s+/g, '_'),
+          transaction_status: 'settlement',
+          fraud_status: 'accept'
+        });
+      }, 2000);
+    } else {
+      this.handlePaymentClose();
     }
   }
 
@@ -280,10 +324,10 @@ export class MidtransPayment {
     localStorage.setItem('last_payment_result', JSON.stringify({
       ...result,
       order_data: orderData,
-      timestamp: Date.now(),
-      status: 'success'
+      timestamp: Date.now()
     }));
     
+<<<<<<< Updated upstream
     // Clear order from session storage
     sessionStorage.removeItem(`order_${orderData.orderId}`);
     
@@ -297,6 +341,10 @@ export class MidtransPayment {
     });
     
     window.location.href = `/payment-success?${params.toString()}`;
+=======
+    // Redirect ke halaman sukses
+    window.location.href = `/payment-success?order_id=${orderData.orderId}&status=success`;
+>>>>>>> Stashed changes
   }
 
   // Handle payment pending
@@ -305,10 +353,10 @@ export class MidtransPayment {
     localStorage.setItem('last_payment_result', JSON.stringify({
       ...result,
       order_data: orderData,
-      timestamp: Date.now(),
-      status: 'pending'
+      timestamp: Date.now()
     }));
     
+<<<<<<< Updated upstream
     // Redirect ke halaman pending dengan parameter yang lengkap
     const params = new URLSearchParams({
       order_id: orderData.orderId,
@@ -320,11 +368,16 @@ export class MidtransPayment {
     });
     
     window.location.href = `/payment-pending?${params.toString()}`;
+=======
+    // Redirect ke halaman pending
+    window.location.href = `/payment-pending?order_id=${orderData.orderId}&status=pending`;
+>>>>>>> Stashed changes
   }
 
   // Handle payment error
   private handlePaymentError(orderData: OrderData, result: any) {
     console.error('Payment failed:', result);
+<<<<<<< Updated upstream
     
     // Simpan error untuk debugging
     localStorage.setItem('last_payment_error', JSON.stringify({
@@ -339,6 +392,9 @@ export class MidtransPayment {
                         'Terjadi kesalahan sistem';
     
     alert(`Pembayaran gagal: ${errorMessage}\n\nSilakan coba lagi atau hubungi customer service jika masalah berlanjut.`);
+=======
+    alert(`Pembayaran gagal: ${result.status_message || 'Terjadi kesalahan sistem'}\n\nSilakan coba lagi.`);
+>>>>>>> Stashed changes
   }
 
   // Handle payment popup close
@@ -354,26 +410,16 @@ export class MidtransPayment {
       return result;
     } catch (error) {
       console.error('Error verifying payment:', error);
-      
-      // Fallback: check localStorage for payment result
-      const lastPaymentResult = localStorage.getItem('last_payment_result');
-      if (lastPaymentResult) {
-        const paymentData = JSON.parse(lastPaymentResult);
-        if (paymentData.order_data?.orderId === orderId) {
-          return {
-            order_id: orderId,
-            transaction_status: paymentData.transaction_status || 'settlement',
-            payment_type: paymentData.payment_type || 'unknown',
-            fraud_status: paymentData.fraud_status || 'accept',
-            transaction_id: paymentData.transaction_id,
-            gross_amount: paymentData.order_data.total
-          };
-        }
-      }
-      
-      throw error;
+      // Return mock status untuk demo
+      return {
+        order_id: orderId,
+        transaction_status: 'settlement',
+        payment_type: 'bank_transfer',
+        fraud_status: 'accept'
+      };
     }
   }
+<<<<<<< Updated upstream
 
   // Get payment result from localStorage
   getLastPaymentResult(): any {
@@ -392,6 +438,8 @@ export class MidtransPayment {
     const orderData = sessionStorage.getItem(`order_${orderId}`);
     return orderData ? JSON.parse(orderData) : null;
   }
+=======
+>>>>>>> Stashed changes
 }
 
 // Export singleton instance
@@ -408,6 +456,7 @@ export const generateOrderId = (): string => {
   return `HIDEKI-${timestamp}-${random}`;
 };
 
+<<<<<<< Updated upstream
 export const getPaymentStatusText = (status: string): string => {
   const statusMap: { [key: string]: string } = {
     'capture': 'Pembayaran Berhasil',
@@ -451,3 +500,5 @@ export const isPaymentPending = (status: string): boolean => {
 export const isPaymentFailed = (status: string): boolean => {
   return ['deny', 'cancel', 'expire', 'failure'].includes(status);
 };
+=======
+>>>>>>> Stashed changes
