@@ -128,6 +128,7 @@ const Helm = () => {
   }
 
   const handleProductClick = (product: Product) => {
+    console.log('Opening product detail for:', product.name); // Debug log
     setSelectedProduct(product)
     setIsModalOpen(true)
   }

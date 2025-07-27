@@ -62,6 +62,10 @@ const Checkout = () => {
   const [isLoadingShipping, setIsLoadingShipping] = useState(false);
   const [isLoadingCities, setIsLoadingCities] = useState(false);
 
+  // Form validation states
+  const [validationErrors, setValidationErrors] = useState<Partial<CustomerInfo>>({});
+  const [isFormValid, setIsFormValid] = useState(false);
+
   // Calculate totals
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const adminFee = 1000; // Biaya admin
@@ -151,6 +155,66 @@ const Checkout = () => {
     }
   }, [customerInfo.cityId, cartItems]);
 
+  // Form validation function
+  const validateForm = (info: CustomerInfo) => {
+    const errors: Partial<CustomerInfo> = {};
+    
+    // Name validation
+    if (!info.name || info.name.trim().length < 2) {
+      errors.name = 'Nama harus minimal 2 karakter';
+    } else if (!/^[a-zA-Z\s]+$/.test(info.name.trim())) {
+      errors.name = 'Nama hanya boleh mengandung huruf dan spasi';
+    }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!info.email) {
+      errors.email = 'Email wajib diisi';
+    } else if (!emailRegex.test(info.email)) {
+      errors.email = 'Format email tidak valid';
+    }
+    
+    // Phone validation
+    const phoneRegex = /^(\+62|62|0)[0-9]{9,13}$/;
+    if (!info.phone) {
+      errors.phone = 'Nomor telepon wajib diisi';
+    } else if (!phoneRegex.test(info.phone.replace(/\s+/g, ''))) {
+      errors.phone = 'Format nomor telepon Indonesia tidak valid';
+    }
+    
+    // Address validation
+    if (!info.address || info.address.trim().length < 10) {
+      errors.address = 'Alamat harus minimal 10 karakter';
+    }
+    
+    // City validation
+    if (!info.cityId) {
+      errors.city = 'Kota/Kabupaten wajib dipilih';
+    }
+    
+    // Province validation
+    if (!info.province) {
+      errors.province = 'Provinsi wajib dipilih';
+    }
+    
+    // Postal code validation
+    const postalRegex = /^[0-9]{5}$/;
+    if (!info.postalCode) {
+      errors.postalCode = 'Kode pos wajib diisi';
+    } else if (!postalRegex.test(info.postalCode)) {
+      errors.postalCode = 'Kode pos harus 5 digit angka';
+    }
+    
+    return errors;
+  };
+
+  // Real-time form validation
+  useEffect(() => {
+    const errors = validateForm(customerInfo);
+    setValidationErrors(errors);
+    setIsFormValid(Object.keys(errors).length === 0);
+  }, [customerInfo]);
+
   const handleUpdateQuantity = (id: string, quantity: number) => {
     if (quantity < 1) return;
     updateQuantity(id, quantity);
@@ -221,37 +285,18 @@ const Checkout = () => {
   };
 
   const validateCustomerInfo = (): boolean => {
-    const required = ['name', 'email', 'phone', 'address', 'province', 'cityId', 'postalCode'];
-    for (const field of required) {
-      if (!customerInfo[field as keyof CustomerInfo]) {
-        toast({
-          title: "Data Tidak Lengkap",
-          description: `Silakan lengkapi ${field === 'cityId' ? 'kota' : field}`,
-          variant: "destructive"
-        });
-        return false;
-      }
-    }
+    // Use enhanced validation function
+    const validationErrors = validateForm(customerInfo);
     
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(customerInfo.email)) {
+    if (Object.keys(validationErrors).length > 0) {
+      // Show specific error for first field that has error
+      const firstError = Object.entries(validationErrors)[0];
       toast({
-        title: "Email Tidak Valid",
-        description: "Silakan masukkan alamat email yang valid",
+        title: "Data Tidak Valid",
+        description: firstError[1],
         variant: "destructive"
       });
-      return false;
-    }
-
-    // Validate phone format
-    const phoneRegex = /^[0-9+\-\s()]+$/;
-    if (!phoneRegex.test(customerInfo.phone)) {
-      toast({
-        title: "Nomor Telepon Tidak Valid",
-        description: "Silakan masukkan nomor telepon yang valid",
-        variant: "destructive"
-      });
+      setValidationErrors(validationErrors);
       return false;
     }
 
@@ -260,6 +305,27 @@ const Checkout = () => {
       toast({
         title: "Pilih Metode Pengiriman",
         description: "Silakan pilih metode pengiriman terlebih dahulu",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    // Validate cart items
+    if (cartItems.length === 0) {
+      toast({
+        title: "Keranjang Kosong",
+        description: "Silakan tambahkan produk ke keranjang terlebih dahulu",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    // Additional cart validation
+    const invalidItems = cartItems.filter(item => !item.name || !item.price || item.quantity <= 0);
+    if (invalidItems.length > 0) {
+      toast({
+        title: "Item Tidak Valid",
+        description: "Terdapat item di keranjang yang tidak valid",
         variant: "destructive"
       });
       return false;
@@ -515,7 +581,11 @@ const Checkout = () => {
                             value={customerInfo.name}
                             onChange={(e) => handleCustomerInfoChange('name', e.target.value)}
                             placeholder="Masukkan nama lengkap"
+                            className={validationErrors.name ? 'border-red-500' : ''}
                           />
+                          {validationErrors.name && (
+                            <p className="text-red-500 text-sm mt-1">{validationErrors.name}</p>
+                          )}
                         </div>
                         <div>
                           <Label htmlFor="email">Email *</Label>
@@ -525,7 +595,11 @@ const Checkout = () => {
                             value={customerInfo.email}
                             onChange={(e) => handleCustomerInfoChange('email', e.target.value)}
                             placeholder="contoh@email.com"
+                            className={validationErrors.email ? 'border-red-500' : ''}
                           />
+                          {validationErrors.email && (
+                            <p className="text-red-500 text-sm mt-1">{validationErrors.email}</p>
+                          )}
                         </div>
                       </div>
                       <div>
@@ -535,7 +609,11 @@ const Checkout = () => {
                           value={customerInfo.phone}
                           onChange={(e) => handleCustomerInfoChange('phone', e.target.value)}
                           placeholder="08xxxxxxxxxx"
+                          className={validationErrors.phone ? 'border-red-500' : ''}
                         />
+                        {validationErrors.phone && (
+                          <p className="text-red-500 text-sm mt-1">{validationErrors.phone}</p>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -552,7 +630,7 @@ const Checkout = () => {
                         <div>
                           <Label htmlFor="province">Provinsi *</Label>
                           <Select value={customerInfo.province} onValueChange={handleProvinceChange}>
-                            <SelectTrigger>
+                            <SelectTrigger className={validationErrors.province ? 'border-red-500' : ''}>
                               <SelectValue placeholder="Pilih provinsi" />
                             </SelectTrigger>
                             <SelectContent>
@@ -563,6 +641,9 @@ const Checkout = () => {
                               ))}
                             </SelectContent>
                           </Select>
+                          {validationErrors.province && (
+                            <p className="text-red-500 text-sm mt-1">{validationErrors.province}</p>
+                          )}
                         </div>
                         <div>
                           <Label htmlFor="city">Kota/Kabupaten *</Label>
@@ -571,7 +652,7 @@ const Checkout = () => {
                             onValueChange={handleCityChange}
                             disabled={!customerInfo.province || isLoadingCities}
                           >
-                            <SelectTrigger>
+                            <SelectTrigger className={validationErrors.city ? 'border-red-500' : ''}>
                               <SelectValue placeholder={
                                 isLoadingCities ? "Memuat kota..." : 
                                 !customerInfo.province ? "Pilih provinsi dulu" : 
@@ -586,6 +667,9 @@ const Checkout = () => {
                               ))}
                             </SelectContent>
                           </Select>
+                          {validationErrors.city && (
+                            <p className="text-red-500 text-sm mt-1">{validationErrors.city}</p>
+                          )}
                         </div>
                       </div>
                       <div>
@@ -596,7 +680,11 @@ const Checkout = () => {
                           onChange={(e) => handleCustomerInfoChange('address', e.target.value)}
                           placeholder="Masukkan alamat lengkap termasuk nama jalan, nomor rumah, RT/RW"
                           rows={3}
+                          className={validationErrors.address ? 'border-red-500' : ''}
                         />
+                        {validationErrors.address && (
+                          <p className="text-red-500 text-sm mt-1">{validationErrors.address}</p>
+                        )}
                       </div>
                       <div>
                         <Label htmlFor="postalCode">Kode Pos *</Label>
@@ -605,7 +693,11 @@ const Checkout = () => {
                           value={customerInfo.postalCode}
                           onChange={(e) => handleCustomerInfoChange('postalCode', e.target.value)}
                           placeholder="12345"
+                          className={validationErrors.postalCode ? 'border-red-500' : ''}
                         />
+                        {validationErrors.postalCode && (
+                          <p className="text-red-500 text-sm mt-1">{validationErrors.postalCode}</p>
+                        )}
                       </div>
                       <div>
                         <Label htmlFor="notes">Catatan Tambahan</Label>
