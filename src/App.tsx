@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Checkout from "./pages/Checkout";
 import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentPending from "./pages/PaymentPending";
 import Helm from "./pages/Helm";
 import RsvProstreet from "./pages/RsvProstreet";
 import Apparels from "./pages/Apparels";
@@ -36,6 +37,7 @@ const App = () => (
           <Route path="/distributor" element={<Distributor />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
+          <Route path="/payment-pending" element={<PaymentPending />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

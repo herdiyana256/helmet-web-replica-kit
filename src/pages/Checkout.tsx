@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ShoppingCart, Trash2, Plus, Minus, ArrowLeft, CreditCard, MapPin, User, Phone, Mail } from "lucide-react";
+import { ShoppingCart, Trash2, Plus, Minus, ArrowLeft, CreditCard, MapPin, User, Phone, Mail, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { midtransPayment } from "@/lib/midtrans";
+import { rajaOngkirService, ShippingOption, Province, City } from "@/api/rajaongkir";
 import { useToast } from "@/hooks/use-toast";
 import { useCartStore } from "@/store/cartStore";
 import Header from "@/components/Header";
@@ -21,6 +23,8 @@ interface CustomerInfo {
   city: string;
   postalCode: string;
   notes?: string;
+  province?: string;
+  cityId?: string;
 }
 
 interface OrderData {
@@ -28,6 +32,8 @@ interface OrderData {
   items: any[];
   total: number;
   customerInfo: CustomerInfo;
+  shippingCost: number;
+  adminFee: number;
 }
 
 const Checkout = () => {
@@ -42,14 +48,108 @@ const Checkout = () => {
     address: '',
     city: '',
     postalCode: '',
-    notes: ''
+    notes: '',
+    province: '',
+    cityId: ''
   });
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
+  // Shipping related states
+  const [provinces, setProvinces] = useState<Province[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+  const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
+  const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null);
+  const [isLoadingShipping, setIsLoadingShipping] = useState(false);
+  const [isLoadingCities, setIsLoadingCities] = useState(false);
+
   // Calculate totals
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const shippingCost = subtotal > 2000000 ? 0 : 50000; // Free shipping over 2M
-  const total = subtotal + shippingCost;
+  const adminFee = 1000; // Biaya admin
+  const shippingCost = selectedShipping?.cost || 0;
+  const total = subtotal + shippingCost + adminFee;
+
+  // Load provinces on mount
+  useEffect(() => {
+    const loadProvinces = async () => {
+      try {
+        const provinceData = await rajaOngkirService.getProvinces();
+        setProvinces(provinceData);
+      } catch (error) {
+        console.error('Error loading provinces:', error);
+        toast({
+          title: "Error",
+          description: "Gagal memuat data provinsi",
+          variant: "destructive"
+        });
+      }
+    };
+    loadProvinces();
+  }, []);
+
+  // Load cities when province changes
+  useEffect(() => {
+    if (customerInfo.province) {
+      const loadCities = async () => {
+        setIsLoadingCities(true);
+        try {
+          const cityData = await rajaOngkirService.getCities(customerInfo.province!);
+          setCities(cityData);
+        } catch (error) {
+          console.error('Error loading cities:', error);
+          toast({
+            title: "Error",
+            description: "Gagal memuat data kota",
+            variant: "destructive"
+          });
+        } finally {
+          setIsLoadingCities(false);
+        }
+      };
+      loadCities();
+    } else {
+      setCities([]);
+    }
+  }, [customerInfo.province]);
+
+  // Load shipping options when city is selected
+  useEffect(() => {
+    if (customerInfo.cityId && cartItems.length > 0) {
+      const loadShippingOptions = async () => {
+        setIsLoadingShipping(true);
+        try {
+          const weight = rajaOngkirService.calculateWeight(cartItems);
+          const origin = "151"; // Jakarta Barat (asal pengiriman)
+          const destination = customerInfo.cityId!;
+          
+          const options = await rajaOngkirService.getShippingOptions(
+            origin,
+            destination,
+            weight,
+            subtotal
+          );
+          setShippingOptions(options);
+          
+          // Auto select cheapest option
+          if (options.length > 0) {
+            setSelectedShipping(options[0]);
+          }
+        } catch (error) {
+          console.error('Error loading shipping options:', error);
+          toast({
+            title: "Error",
+            description: "Gagal memuat opsi pengiriman",
+            variant: "destructive"
+          });
+        } finally {
+          setIsLoadingShipping(false);
+        }
+      };
+      loadShippingOptions();
+    } else {
+      setShippingOptions([]);
+      setSelectedShipping(null);
+    }
+  }, [customerInfo.cityId, cartItems]);
 
   const handleUpdateQuantity = (id: string, quantity: number) => {
     if (quantity < 1) return;
@@ -85,15 +185,48 @@ const Checkout = () => {
       ...prev,
       [field]: value
     }));
+
+    // Reset city when province changes
+    if (field === 'province') {
+      setCustomerInfo(prev => ({
+        ...prev,
+        cityId: '',
+        city: ''
+      }));
+      setSelectedShipping(null);
+    }
+  };
+
+  const handleProvinceChange = (provinceId: string) => {
+    const selectedProvince = provinces.find(p => p.province_id === provinceId);
+    handleCustomerInfoChange('province', provinceId);
+    if (selectedProvince) {
+      setCustomerInfo(prev => ({
+        ...prev,
+        province: provinceId
+      }));
+    }
+  };
+
+  const handleCityChange = (cityId: string) => {
+    const selectedCity = cities.find(c => c.city_id === cityId);
+    handleCustomerInfoChange('cityId', cityId);
+    if (selectedCity) {
+      setCustomerInfo(prev => ({
+        ...prev,
+        cityId: cityId,
+        city: selectedCity.city_name
+      }));
+    }
   };
 
   const validateCustomerInfo = (): boolean => {
-    const required = ['name', 'email', 'phone', 'address', 'city', 'postalCode'];
+    const required = ['name', 'email', 'phone', 'address', 'province', 'cityId', 'postalCode'];
     for (const field of required) {
       if (!customerInfo[field as keyof CustomerInfo]) {
         toast({
           title: "Data Tidak Lengkap",
-          description: `Silakan lengkapi ${field}`,
+          description: `Silakan lengkapi ${field === 'cityId' ? 'kota' : field}`,
           variant: "destructive"
         });
         return false;
@@ -122,6 +255,16 @@ const Checkout = () => {
       return false;
     }
 
+    // Validate shipping selection
+    if (!selectedShipping) {
+      toast({
+        title: "Pilih Metode Pengiriman",
+        description: "Silakan pilih metode pengiriman terlebih dahulu",
+        variant: "destructive"
+      });
+      return false;
+    }
+
     return true;
   };
 
@@ -132,10 +275,12 @@ const Checkout = () => {
     
     try {
       const orderData: OrderData = {
-        orderId: `ORDER-${Date.now()}`,
+        orderId: `HIDEKI-${Date.now()}`,
         items: cartItems,
         total: total,
-        customerInfo: customerInfo
+        customerInfo: customerInfo,
+        shippingCost: shippingCost,
+        adminFee: adminFee
       };
 
       await midtransPayment.processPayment(orderData);
@@ -314,19 +459,18 @@ const Checkout = () => {
                       </div>
                       <div className="flex justify-between">
                         <span>Ongkos Kirim</span>
-                        <span className={shippingCost === 0 ? 'text-green-600' : ''}>
-                          {shippingCost === 0 ? 'GRATIS' : `Rp ${shippingCost.toLocaleString('id-ID')}`}
+                        <span className="text-gray-500">
+                          Hitung di checkout
                         </span>
                       </div>
-                      {shippingCost === 0 && (
-                        <p className="text-sm text-green-600">
-                          🎉 Selamat! Anda mendapat gratis ongkir
-                        </p>
-                      )}
+                      <div className="flex justify-between">
+                        <span>Biaya Admin</span>
+                        <span>Rp {adminFee.toLocaleString('id-ID')}</span>
+                      </div>
                       <Separator />
                       <div className="flex justify-between text-lg font-bold">
                         <span>Total</span>
-                        <span className="text-red-600">Rp {total.toLocaleString('id-ID')}</span>
+                        <span className="text-red-600">Rp {(subtotal + adminFee).toLocaleString('id-ID')}+</span>
                       </div>
                       <Button 
                         className="w-full bg-red-600 hover:bg-red-700"
@@ -404,6 +548,46 @@ const Checkout = () => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="province">Provinsi *</Label>
+                          <Select value={customerInfo.province} onValueChange={handleProvinceChange}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Pilih provinsi" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {provinces.map((province) => (
+                                <SelectItem key={province.province_id} value={province.province_id}>
+                                  {province.province}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="city">Kota/Kabupaten *</Label>
+                          <Select 
+                            value={customerInfo.cityId} 
+                            onValueChange={handleCityChange}
+                            disabled={!customerInfo.province || isLoadingCities}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={
+                                isLoadingCities ? "Memuat kota..." : 
+                                !customerInfo.province ? "Pilih provinsi dulu" : 
+                                "Pilih kota"
+                              } />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {cities.map((city) => (
+                                <SelectItem key={city.city_id} value={city.city_id}>
+                                  {city.type} {city.city_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                       <div>
                         <Label htmlFor="address">Alamat Lengkap *</Label>
                         <Textarea
@@ -414,25 +598,14 @@ const Checkout = () => {
                           rows={3}
                         />
                       </div>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="city">Kota *</Label>
-                          <Input
-                            id="city"
-                            value={customerInfo.city}
-                            onChange={(e) => handleCustomerInfoChange('city', e.target.value)}
-                            placeholder="Masukkan nama kota"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="postalCode">Kode Pos *</Label>
-                          <Input
-                            id="postalCode"
-                            value={customerInfo.postalCode}
-                            onChange={(e) => handleCustomerInfoChange('postalCode', e.target.value)}
-                            placeholder="12345"
-                          />
-                        </div>
+                      <div>
+                        <Label htmlFor="postalCode">Kode Pos *</Label>
+                        <Input
+                          id="postalCode"
+                          value={customerInfo.postalCode}
+                          onChange={(e) => handleCustomerInfoChange('postalCode', e.target.value)}
+                          placeholder="12345"
+                        />
                       </div>
                       <div>
                         <Label htmlFor="notes">Catatan Tambahan</Label>
@@ -446,6 +619,68 @@ const Checkout = () => {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* Shipping Options */}
+                  {shippingOptions.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Truck className="w-5 h-5" />
+                          Pilih Metode Pengiriman
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {shippingOptions.map((option, index) => (
+                          <div key={index} className="border rounded-lg p-4">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="shipping"
+                                value={index}
+                                checked={selectedShipping?.courier === option.courier && selectedShipping?.service === option.service}
+                                onChange={() => setSelectedShipping(option)}
+                                className="text-red-600"
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="font-medium">
+                                      {option.courierName} - {option.service}
+                                    </p>
+                                    <p className="text-sm text-gray-600">
+                                      {option.description}
+                                    </p>
+                                    <p className="text-sm text-gray-500">
+                                      Estimasi: {option.etd} hari
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="font-bold text-red-600">
+                                      {option.cost === 0 ? 'GRATIS' : `Rp ${option.cost.toLocaleString('id-ID')}`}
+                                    </p>
+                                    {option.note && (
+                                      <p className="text-xs text-green-600">
+                                        {option.note}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </label>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {isLoadingShipping && customerInfo.cityId && (
+                    <Card>
+                      <CardContent className="p-6 text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto mb-2"></div>
+                        <p className="text-gray-600">Memuat opsi pengiriman...</p>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
 
                 {/* Order Summary & Payment */}
@@ -490,9 +725,20 @@ const Checkout = () => {
                       <div className="flex justify-between">
                         <span>Ongkos Kirim</span>
                         <span className={shippingCost === 0 ? 'text-green-600' : ''}>
-                          {shippingCost === 0 ? 'GRATIS' : `Rp ${shippingCost.toLocaleString('id-ID')}`}
+                          {shippingCost === 0 ? 'GRATIS' : 
+                           selectedShipping ? `Rp ${shippingCost.toLocaleString('id-ID')}` : 
+                           'Pilih pengiriman'}
                         </span>
                       </div>
+                      <div className="flex justify-between">
+                        <span>Biaya Admin</span>
+                        <span>Rp {adminFee.toLocaleString('id-ID')}</span>
+                      </div>
+                      {selectedShipping && shippingCost === 0 && (
+                        <p className="text-sm text-green-600">
+                          🎉 Selamat! Anda mendapat gratis ongkir
+                        </p>
+                      )}
                       <Separator />
                       <div className="flex justify-between text-lg font-bold">
                         <span>Total Pembayaran</span>
@@ -501,7 +747,7 @@ const Checkout = () => {
                       <Button 
                         className="w-full bg-red-600 hover:bg-red-700"
                         onClick={handleProceedToPayment}
-                        disabled={isProcessingPayment || cartItems.length === 0}
+                        disabled={isProcessingPayment || cartItems.length === 0 || !selectedShipping}
                       >
                         {isProcessingPayment ? (
                           <>

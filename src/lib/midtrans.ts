@@ -1,6 +1,8 @@
 // Midtrans integration untuk pembayaran
 // Menggunakan Snap API untuk kemudahan integrasi
 
+import { midtransBackendAPI } from '@/api/midtrans-backend';
+
 export interface OrderData {
   orderId: string;
   items: CartItem[];
@@ -27,6 +29,8 @@ export interface CustomerInfo {
   city: string;
   postalCode: string;
   notes?: string;
+  province?: string;
+  cityId?: string;
 }
 
 // Midtrans configuration
@@ -216,21 +220,8 @@ export class MidtransPayment {
     };
 
     try {
-      // Call backend API to create transaction
-      const response = await fetch('/api/create-transaction', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Backend API error: ${errorData.message || 'Unknown error'}`);
-      }
-
-      const result = await response.json();
+      // Call backend API to create transaction using mock API for development
+      const result = await midtransBackendAPI.createTransaction(payload);
       
       if (!result.token) {
         throw new Error('No token received from Midtrans');
@@ -296,8 +287,16 @@ export class MidtransPayment {
     // Clear order from session storage
     sessionStorage.removeItem(`order_${orderData.orderId}`);
     
-    // Redirect ke halaman sukses
-    window.location.href = `/payment-success?order_id=${orderData.orderId}&status=success&transaction_id=${result.transaction_id || result.order_id}`;
+    // Redirect ke halaman sukses dengan parameter yang lengkap
+    const params = new URLSearchParams({
+      order_id: orderData.orderId,
+      status: 'success',
+      transaction_id: result.transaction_id || result.order_id,
+      payment_type: result.payment_type || 'unknown',
+      gross_amount: orderData.total.toString()
+    });
+    
+    window.location.href = `/payment-success?${params.toString()}`;
   }
 
   // Handle payment pending
@@ -310,8 +309,17 @@ export class MidtransPayment {
       status: 'pending'
     }));
     
-    // Redirect ke halaman pending
-    window.location.href = `/payment-pending?order_id=${orderData.orderId}&status=pending&transaction_id=${result.transaction_id || result.order_id}`;
+    // Redirect ke halaman pending dengan parameter yang lengkap
+    const params = new URLSearchParams({
+      order_id: orderData.orderId,
+      status: 'pending',
+      transaction_id: result.transaction_id || result.order_id,
+      payment_type: result.payment_type || 'unknown',
+      va_number: result.va_numbers?.[0]?.va_number || '',
+      bank: result.va_numbers?.[0]?.bank || result.payment_type || ''
+    });
+    
+    window.location.href = `/payment-pending?${params.toString()}`;
   }
 
   // Handle payment error
@@ -325,7 +333,12 @@ export class MidtransPayment {
       timestamp: Date.now()
     }));
     
-    alert(`Pembayaran gagal: ${result.status_message || 'Terjadi kesalahan sistem'}\n\nSilakan coba lagi.`);
+    // Show detailed error message
+    const errorMessage = result.status_message || 
+                        result.error_messages?.join(', ') || 
+                        'Terjadi kesalahan sistem';
+    
+    alert(`Pembayaran gagal: ${errorMessage}\n\nSilakan coba lagi atau hubungi customer service jika masalah berlanjut.`);
   }
 
   // Handle payment popup close
@@ -337,11 +350,8 @@ export class MidtransPayment {
   // Verify payment status (untuk dipanggil dari halaman success/pending)
   async verifyPaymentStatus(orderId: string): Promise<any> {
     try {
-      const response = await fetch(`/api/payment-status/${orderId}`);
-      if (!response.ok) {
-        throw new Error('Failed to verify payment status');
-      }
-      return await response.json();
+      const result = await midtransBackendAPI.getPaymentStatus(orderId);
+      return result;
     } catch (error) {
       console.error('Error verifying payment:', error);
       
@@ -376,6 +386,12 @@ export class MidtransPayment {
     localStorage.removeItem('last_payment_result');
     localStorage.removeItem('last_payment_error');
   }
+
+  // Get order data from sessionStorage
+  getOrderData(orderId: string): OrderData | null {
+    const orderData = sessionStorage.getItem(`order_${orderId}`);
+    return orderData ? JSON.parse(orderData) : null;
+  }
 }
 
 // Export singleton instance
@@ -389,7 +405,7 @@ export const formatCurrency = (amount: number): string => {
 export const generateOrderId = (): string => {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substr(2, 5).toUpperCase();
-  return `ORDER-${timestamp}-${random}`;
+  return `HIDEKI-${timestamp}-${random}`;
 };
 
 export const getPaymentStatusText = (status: string): string => {
@@ -404,6 +420,24 @@ export const getPaymentStatusText = (status: string): string => {
   };
   
   return statusMap[status] || 'Status Tidak Dikenal';
+};
+
+export const getPaymentMethodText = (paymentType: string): string => {
+  const methodMap: { [key: string]: string } = {
+    'bank_transfer': 'Transfer Bank',
+    'echannel': 'Mandiri Bill Payment',
+    'permata_va': 'Permata Virtual Account',
+    'bca_va': 'BCA Virtual Account',
+    'bni_va': 'BNI Virtual Account',
+    'other_va': 'Virtual Account',
+    'gopay': 'GoPay',
+    'shopeepay': 'ShopeePay',
+    'credit_card': 'Kartu Kredit',
+    'cstore': 'Indomaret/Alfamart',
+    'akulaku': 'Akulaku'
+  };
+  
+  return methodMap[paymentType] || paymentType.replace('_', ' ').toUpperCase();
 };
 
 export const isPaymentSuccess = (status: string): boolean => {
