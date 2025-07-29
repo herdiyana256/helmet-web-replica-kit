@@ -15,6 +15,8 @@ import Accessories from "./pages/Accessories";
 import Promo from "./pages/Promo";
 import Career from "./pages/Career";
 import Distributor from "./pages/Distributor";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 import WhatsAppFloatingButton from "@/components/WhatsAppFloatingButton";
 
 
@@ -36,6 +38,8 @@ const App = () => (
           <Route path="/promo" element={<Promo />} />
           <Route path="/career" element={<Career />} />
           <Route path="/distributor" element={<Distributor />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/payment-pending" element={<PaymentPending />} />
