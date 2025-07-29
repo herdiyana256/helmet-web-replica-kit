@@ -16,6 +16,16 @@ import {
 } from "@/components/ui/navigation-menu"
 import { Link, useNavigate } from "react-router-dom"
 import { useCartStore } from "@/store/cartStore"
+import { useAuthStore } from "@/store/authStore"
+import { LogOut, UserCircle, Shield } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -26,6 +36,9 @@ const Header = () => {
   // Menggunakan useCartStore untuk mendapatkan jumlah item di keranjang
   const { items } = useCartStore()
   const cartCount = items.reduce((total, item) => total + item.quantity, 0)
+
+  // Authentication state
+  const { user, isAuthenticated, logout } = useAuthStore()
 
   // Updated helm submenus dengan brand dan kategori
   const helmSubmenus = [
@@ -193,9 +206,49 @@ const Header = () => {
             >
               <Search className="h-5 w-5" />
             </Button>
-            <Button variant="ghost" size="icon" className="text-black hover:bg-gray-100">
-              <User className="h-5 w-5" />
-            </Button>
+            {/* User Authentication */}
+            {isAuthenticated ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-black hover:bg-gray-100">
+                    <UserCircle className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium">{user?.name}</p>
+                      <p className="text-xs text-muted-foreground">{user?.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate('/profile')}>
+                    <UserCircle className="mr-2 h-4 w-4" />
+                    <span>Profil Saya</span>
+                  </DropdownMenuItem>
+                  {user?.role === 'admin' && (
+                    <DropdownMenuItem onClick={() => navigate('/admin/dashboard')}>
+                      <Shield className="mr-2 h-4 w-4" />
+                      <span>Dashboard Admin</span>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Keluar</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="text-black hover:bg-gray-100"
+                onClick={() => navigate('/login')}
+              >
+                <User className="h-5 w-5" />
+              </Button>
+            )}
             <Link to="/checkout">
               <Button variant="ghost" size="icon" className="text-black hover:bg-gray-100 relative">
                 <ShoppingCart className="h-5 w-5" />

@@ -8,8 +8,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { midtransPayment } from "@/lib/midtrans";
-import { rajaOngkirService, ShippingOption, Province, City } from "@/api/rajaongkir";
+import { 
+  createSnapTransaction, 
+  openSnapPayment, 
+  generateOrderId,
+  calculateTotalAmount,
+  type CustomerDetails,
+  type ItemDetail,
+  type TransactionDetails
+} from "@/api/midtrans";
+import { 
+  rajaOngkirService,
+  type Province,
+  type City,
+  type ShippingOption
+} from "@/api/rajaongkir";
 import { useToast } from "@/hooks/use-toast";
 import { useCartStore } from "@/store/cartStore";
 import Header from "@/components/Header";
@@ -120,9 +133,12 @@ const Checkout = () => {
     if (customerInfo.cityId && cartItems.length > 0) {
       const loadShippingOptions = async () => {
         setIsLoadingShipping(true);
+        setShippingOptions([]);
+        setSelectedShipping(null);
+        
         try {
           const weight = rajaOngkirService.calculateWeight(cartItems);
-          const origin = "151"; // Jakarta Barat (asal pengiriman)
+          const origin = "152"; // Jakarta Pusat (store location)
           const destination = customerInfo.cityId!;
           
           const options = await rajaOngkirService.getShippingOptions(
@@ -131,6 +147,7 @@ const Checkout = () => {
             weight,
             subtotal
           );
+          
           setShippingOptions(options);
           
           // Auto select cheapest option
@@ -340,19 +357,116 @@ const Checkout = () => {
     setIsProcessingPayment(true);
     
     try {
-      const orderData: OrderData = {
-        orderId: `HIDEKI-${Date.now()}`,
-        items: cartItems,
-        total: total,
-        customerInfo: customerInfo,
-        shippingCost: shippingCost,
-        adminFee: adminFee
+      const orderId = generateOrderId('HIDEKI');
+      
+      // Prepare customer details for Midtrans
+      const customerDetails: CustomerDetails = {
+        first_name: customerInfo.name.split(' ')[0],
+        last_name: customerInfo.name.split(' ').slice(1).join(' ') || '',
+        email: customerInfo.email,
+        phone: customerInfo.phone,
+        billing_address: {
+          first_name: customerInfo.name.split(' ')[0],
+          last_name: customerInfo.name.split(' ').slice(1).join(' ') || '',
+          email: customerInfo.email,
+          phone: customerInfo.phone,
+          address: customerInfo.address,
+          city: customerInfo.city,
+          postal_code: customerInfo.postalCode,
+          country_code: 'IDN'
+        },
+        shipping_address: {
+          first_name: customerInfo.name.split(' ')[0],
+          last_name: customerInfo.name.split(' ').slice(1).join(' ') || '',
+          email: customerInfo.email,
+          phone: customerInfo.phone,
+          address: customerInfo.address,
+          city: customerInfo.city,
+          postal_code: customerInfo.postalCode,
+          country_code: 'IDN'
+        }
       };
 
-      await midtransPayment.processPayment(orderData);
-      
-      // Clear cart after successful payment initiation
-      clearCart();
+      // Prepare item details
+      const itemDetails: ItemDetail[] = [
+        ...cartItems.map(item => ({
+          id: item.id,
+          price: item.price,
+          quantity: item.quantity,
+          name: item.name,
+          brand: item.brand,
+          category: 'helmet',
+          merchant_name: 'Hideki Helmets'
+        })),
+        // Add shipping cost as separate item
+        {
+          id: 'shipping',
+          price: shippingCost,
+          quantity: 1,
+          name: selectedShipping ? 
+            `Ongkir ${selectedShipping.courierName} ${selectedShipping.service}` : 
+            'Ongkos Kirim',
+          category: 'shipping'
+        },
+        // Add admin fee as separate item
+        {
+          id: 'admin_fee',
+          price: adminFee,
+          quantity: 1,
+          name: 'Biaya Admin',
+          category: 'fee'
+        }
+      ];
+
+      // Prepare transaction details
+      const transactionDetails: TransactionDetails = {
+        order_id: orderId,
+        gross_amount: total
+      };
+
+      // Create Snap transaction
+      const snapResponse = await createSnapTransaction({
+        transaction_details: transactionDetails,
+        item_details: itemDetails,
+        customer_details: customerDetails,
+        custom_field1: selectedShipping?.service || '',
+        custom_field2: selectedShipping?.etd || '',
+        custom_field3: customerInfo.notes || ''
+      });
+
+      // Open Snap payment popup
+      await openSnapPayment(
+        snapResponse.token,
+        (result) => {
+          // Payment success
+          toast({
+            title: "Pembayaran Berhasil",
+            description: "Terima kasih! Pesanan Anda sedang diproses.",
+          });
+          clearCart();
+          window.location.href = '/payment-success';
+        },
+        (result) => {
+          // Payment pending
+          toast({
+            title: "Pembayaran Pending",
+            description: "Pembayaran Anda sedang diproses. Mohon tunggu konfirmasi.",
+          });
+          window.location.href = '/payment-pending';
+        },
+        (result) => {
+          // Payment error
+          toast({
+            title: "Pembayaran Gagal",
+            description: "Terjadi kesalahan saat memproses pembayaran.",
+            variant: "destructive"
+          });
+        },
+        () => {
+          // Payment popup closed
+          console.log('Payment popup closed by user');
+        }
+      );
       
     } catch (error) {
       console.error('Payment error:', error);
